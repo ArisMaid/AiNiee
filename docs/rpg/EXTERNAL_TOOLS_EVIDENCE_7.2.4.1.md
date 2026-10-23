@@ -13,12 +13,13 @@
 | 三个 SDK | 复用既有合成往返验收，指向新安装目录；3 项实际通过、0 跳过；重复原文分别回写、构建核对通过 |
 | 配置边界 | 已有安装版本不符、坏缓存/网络失败、取消、ZIP 路径越界拒绝、安装后复用与路径持久化通过 |
 | 源码 GUI | 离屏主界面和新管理窗口成功；5 种工具；“一键下载配置”“选择已有安装”存在；未打开工程可访问 |
+| 小窗口 | 新工具按钮加入现有工具行，保持两行高度；1024/1280 宽度的既有布局检查通过 |
 | 更新入口 | RPG 模式使用 ArisMaid/AiNiee，源码 ZIP 排在前面时仍选择 Windows 应用 ZIP |
 
 源码专项命令（不要求普通用户运行）：
 
 ```text
-python -m pytest tests/game_project/test_external_tools.py tests/game_project/test_gui_build_controls.py -q -p no:cacheprovider
+python -m pytest tests/game_project/test_external_tools.py tests/game_project/test_gui_build_controls.py tests/game_project/test_compact_page_layout.py -q -p no:cacheprovider
 python -m pytest tests/test_version_manager_portable_update.py -q -p no:cacheprovider
 python RpgApp.py --gui-check <独立证据目录>
 ```
@@ -28,6 +29,10 @@ GUI 检查（含新管理窗口）与包内容审计。发布流水线见
 [RPG Windows release build](https://github.com/ArisMaid/AiNiee/actions/workflows/rpg-release.yml)。
 源码 GUI 检查不替代便携版检查；以该次 Actions 的完成状态和发布资产为准。
 完整下载日志、SDK 私有工作副本与界面截图在本地验收目录留存，不放入公开源码和应用包。
+
+日常推送执行本次专项检查及核心自检、GUI；全量历史回归改为显式手动运行，
+失败即停并输出停滞堆栈，作业上限 20 分钟。首次额外全量尝试取消后，
+日志中的小窗口失败已定位并修正；取消不作为全量通过。标签推送不再触发重复回归。
 
 本机在线安装不等同于 Windows Sandbox 实测；本版不复写旧沙盒报告。
 验证中模型调用数为 0；真实模型质量、多游戏/版本、任意外部工具新版不在本次接受范围。

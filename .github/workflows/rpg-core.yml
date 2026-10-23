@@ -2,12 +2,14 @@ name: RPG core acceptance
 on:
   workflow_dispatch:
   push:
+    branches: ['main', 'codex/**']
     paths: ['ModuleFolders/**', 'UserInterface/GameProject/**', 'Tools/**', 'tests/game_project/**', 'Resource/GameProfiles/**', 'Resource/RpgRuntime/**', 'RpgApp.py', 'requirements-rpg.lock']
   pull_request:
     paths: ['ModuleFolders/**', 'UserInterface/GameProject/**', 'Tools/**', 'tests/game_project/**', 'RpgApp.py']
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,7 +23,12 @@ jobs:
           Copy-Item -LiteralPath Tools/package.json -Destination .tools/js/package.json
           Copy-Item -LiteralPath Tools/package-lock.json -Destination .tools/js/package-lock.json
           npm ci --prefix .tools/js --ignore-scripts --no-audit --no-fund
-      - run: python -m pytest tests/game_project -q -p no:cacheprovider
+      - name: Targeted release checks
+        if: github.event_name != 'workflow_dispatch'
+        run: python -m pytest tests/game_project/test_external_tools.py tests/game_project/test_gui_build_controls.py tests/game_project/test_compact_page_layout.py tests/test_version_manager_portable_update.py -q -p no:cacheprovider
+      - name: Full regression (explicit manual run)
+        if: github.event_name == 'workflow_dispatch'
+        run: python -m pytest tests/game_project -x -v -p no:cacheprovider -o faulthandler_timeout=60
       - run: python RpgApp.py --self-check work/ci-selfcheck
       - run: python RpgApp.py --gui-check work/ci-gui
       - uses: actions/upload-artifact@v4

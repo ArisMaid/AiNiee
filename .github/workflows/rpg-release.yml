@@ -6,6 +6,7 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -20,7 +21,7 @@ jobs:
           Copy-Item -LiteralPath Tools/package-lock.json -Destination .tools/js/package-lock.json
           npm ci --prefix .tools/js --ignore-scripts --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
-      - run: python -m pytest tests/game_project/test_external_tools.py tests/game_project/test_gui_build_controls.py -q -p no:cacheprovider
+      - run: python -m pytest tests/game_project/test_external_tools.py tests/game_project/test_gui_build_controls.py tests/game_project/test_compact_page_layout.py tests/test_version_manager_portable_update.py -q -p no:cacheprovider
       - name: Build and audit application
         shell: pwsh
         run: |

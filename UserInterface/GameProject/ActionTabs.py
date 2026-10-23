@@ -41,8 +41,7 @@ def build_action_tabs(page) -> QTabWidget:
         _row(page.resume_scan_button, page.resume_extract_button,
              page.resume_validation_button, page.resume_build_button),
         _row(page.font_button, page.backend_button, page.compare_backend_button,
-             page.images_button, page.migration_button),
-        _row(page.external_tools_button),
+             page.images_button, page.migration_button, page.external_tools_button),
     ]), '工具与恢复')
     translator_page = QWidget()
     translator_layout = QVBoxLayout(translator_page)
