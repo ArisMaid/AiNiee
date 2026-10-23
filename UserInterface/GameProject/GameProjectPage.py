@@ -604,6 +604,8 @@ class GameProjectPage(QWidget):
         self.content_widget = QWidget()
         self.content_widget.setObjectName('game-project-content')
         layout = QVBoxLayout(self.content_widget)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(4)
         self.content_scroll.setWidget(self.content_widget)
         root_layout.addWidget(self.content_scroll)
 
