@@ -28,6 +28,7 @@ from ModuleFolders.Config.Config import ConfigMixin
 from ModuleFolders.Service.Cache.CacheItem import TranslationStatus
 from UserInterface.Widget.AutoHeightTableWidget import AutoHeightTableWidget
 from UserInterface.Widget.Toast import ToastMixin
+from UserInterface.EditView.Proofreading.Common.GameTableEvents import table_event_matches,submit_game_table
 
 
 class SearchResultPage(ConfigMixin, ToastMixin, Base, QWidget):
@@ -54,6 +55,7 @@ class SearchResultPage(ConfigMixin, ToastMixin, Base, QWidget):
         self.setObjectName("SearchResultPage")
 
         self.cache_manager = cache_manager
+        self._game_table_project=cache_manager.project
         self.search_params = search_params
         self.search_results = list(search_results)
 
@@ -186,12 +188,8 @@ class SearchResultPage(ConfigMixin, ToastMixin, Base, QWidget):
             return
 
         file_path, text_index = ref_item.data(Qt.UserRole)
-        self.cache_manager.update_item_text(
-            storage_path=file_path,
-            text_index=text_index,
-            field_name="translated_text",
-            new_text=item.text(),
-        )
+        from ModuleFolders.Service.GameProject.CacheBridge import apply_table_edit
+        if not apply_table_edit(self,item,file_path,text_index,'translated_text',item.text()):return
         self.table.resizeRowToContentsSafe(item.row())
 
     def _show_context_menu(self, pos: QPoint):
@@ -238,6 +236,11 @@ class SearchResultPage(ConfigMixin, ToastMixin, Base, QWidget):
         if not by_file:
             return
 
+        submitted=submit_game_table(self,'translate',[{'file_path':path,'items_to_translate':items}
+            for path,items in by_file.items()],self.UPDATE_EVENT,self.DONE_EVENT)
+        if submitted is not None:
+            if submitted:self.info_toast(self.tra('提示'),self.tra('已提交 {} 行文本的翻译任务。').format(sum(map(len,by_file.values()))))
+            return
         Base.work_status = Base.STATUS.TABLE_TASK
         total = 0
         for file_path, items in by_file.items():
@@ -279,6 +282,7 @@ class SearchResultPage(ConfigMixin, ToastMixin, Base, QWidget):
         self.success_toast(self.tra("操作完成"), self.tra("已从结果中移除 {} 项。").format(len(to_remove)))
 
     def _on_table_update(self, event, data: dict):
+        if not table_event_matches(self,data):return
         file_path = data.get("file_path")
         if data.get("target_column_index") != 2:
             return
@@ -301,24 +305,23 @@ class SearchResultPage(ConfigMixin, ToastMixin, Base, QWidget):
                     continue
 
                 new_text = updated_items[text_index]
-                item = self.table.item(row, self.COL_TRANS)
-                if item:
-                    item.setText(new_text)
-                else:
-                    self.table.setItem(row, self.COL_TRANS, QTableWidgetItem(new_text))
-
-                self.cache_manager.update_generated_translation(
+                accepted=self.cache_manager.update_generated_translation(
                     storage_path=file_path,
                     text_index=text_index,
                     new_text=new_text,
                     translation_status=translation_status,
                 )
+                if accepted is False:continue
+                item = self.table.item(row, self.COL_TRANS)
+                if item:item.setText(new_text)
+                else:self.table.setItem(row, self.COL_TRANS, QTableWidgetItem(new_text))
         finally:
             self.table.blockSignals(False)
 
         self.table.scheduleResizeRowsToContents()
 
     def _on_task_done(self, event, data: dict):
+        if not table_event_matches(self,data):return
         if not self.isVisible():
             return
 
@@ -381,12 +384,8 @@ class SearchResultPage(ConfigMixin, ToastMixin, Base, QWidget):
                     continue
 
                 file_path, text_index = ref_item.data(Qt.UserRole)
-                self.cache_manager.update_item_text(
-                    storage_path=file_path,
-                    text_index=text_index,
-                    field_name="translated_text",
-                    new_text=new_text,
-                )
+                from ModuleFolders.Service.GameProject.CacheBridge import apply_table_edit
+                if not apply_table_edit(self,item,file_path,text_index,'translated_text',new_text):replacement_count-=1
         finally:
             self.table.blockSignals(False)
 

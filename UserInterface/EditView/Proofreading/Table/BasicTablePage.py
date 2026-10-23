@@ -26,6 +26,7 @@ from ModuleFolders.Log.Log import LogMixin
 from ModuleFolders.Service.Cache.CacheItem import TranslationStatus
 from UserInterface.Widget.AutoHeightTableWidget import AutoHeightTableWidget
 from UserInterface.Widget.Toast import ToastMixin
+from UserInterface.EditView.Proofreading.Common.GameTableEvents import table_event_matches,submit_game_table
 
 
 class BasicTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
@@ -55,6 +56,7 @@ class BasicTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
         self._item_changed_handler_enabled = True
         self.file_path = file_path
         self.cache_manager = cache_manager
+        self._game_table_project=cache_manager.project
         self._all_items = file_items or []
         self._items_by_text_index = {item.text_index: item for item in self._all_items}
         self._current_page_index = 0
@@ -247,12 +249,8 @@ class BasicTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
         text_index = text_index_item.data(Qt.UserRole)
         new_text = item.text()
 
-        self.cache_manager.update_item_text(
-            storage_path=self.file_path,
-            text_index=text_index,
-            field_name="translated_text",
-            new_text=new_text,
-        )
+        from ModuleFolders.Service.GameProject.CacheBridge import apply_table_edit
+        if not apply_table_edit(self,item,self.file_path,text_index,'translated_text',new_text):return
         self._sync_local_item(text_index, new_text)
         local_item = self._items_by_text_index.get(text_index)
         if local_item is not None:
@@ -278,6 +276,7 @@ class BasicTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
         menu.exec(self.table.mapToGlobal(pos))
 
     def _on_table_update(self, event, data: dict):
+        if not table_event_matches(self,data):return
         if data.get("file_path") != self.file_path:
             return
 
@@ -290,14 +289,19 @@ class BasicTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
 
         translation_status = data.get("translation_status", TranslationStatus.TRANSLATED)
 
+        accepted_items={}
         for text_index, new_text in updated_items.items():
-            self.cache_manager.update_generated_translation(
+            accepted=self.cache_manager.update_generated_translation(
                 storage_path=self.file_path,
                 text_index=text_index,
                 new_text=new_text,
                 translation_status=translation_status,
             )
+            if accepted is False:continue
+            accepted_items[text_index]=new_text
             self._sync_local_item(text_index, new_text, translation_status)
+
+        updated_items=accepted_items
 
         self._item_changed_handler_enabled = False
         try:
@@ -326,6 +330,7 @@ class BasicTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
             self._item_changed_handler_enabled = True
 
     def _on_task_done(self, event, data: dict):
+        if not table_event_matches(self,data):return
         if data.get("file_path") != self.file_path or not self.isVisible():
             return
 
@@ -352,9 +357,7 @@ class BasicTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
         if not selected_rows:
             return
 
-        if Base.work_status == Base.STATUS.IDLE:
-            Base.work_status = Base.STATUS.TABLE_TASK
-        else:
+        if Base.work_status != Base.STATUS.IDLE:
             print("❌正在执行其他任务中！")
             self.warning_toast(self.tra("提示"), self.tra("正在执行其他任务中！"))
             return
@@ -374,6 +377,12 @@ class BasicTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
         if not items_to_translate:
             return
 
+        submitted=submit_game_table(self,'translate',[{'file_path':self.file_path,
+            'items_to_translate':items_to_translate}],self.UPDATE_EVENT,self.DONE_EVENT)
+        if submitted is not None:
+            if submitted:self.info_toast(self.tra('提示'),self.tra('已提交 {} 行文本的翻译任务。').format(len(items_to_translate)))
+            return
+        Base.work_status=Base.STATUS.TABLE_TASK
         language_stats = self.cache_manager.project.get_file(self.file_path).language_stats
         self.emit(
             Base.EVENT.TABLE_TRANSLATE_START,
@@ -411,13 +420,17 @@ class BasicTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
             self.warning_toast(self.tra("提示"), self.tra("润色前请先确保译文列有内容。"))
             return
 
-        if Base.work_status == Base.STATUS.IDLE:
-            Base.work_status = Base.STATUS.TABLE_TASK
-        else:
+        if Base.work_status != Base.STATUS.IDLE:
             print("❌正在执行其他任务中！")
             self.warning_toast(self.tra("提示"), self.tra("正在执行其他任务中！"))
             return
 
+        submitted=submit_game_table(self,'polish',[{'file_path':self.file_path,
+            'items_to_polish':items_to_polish}],self.UPDATE_EVENT,self.DONE_EVENT)
+        if submitted is not None:
+            if submitted:self.info_toast(self.tra('提示'),self.tra('已提交 {} 行文本的润色任务。').format(len(items_to_polish)))
+            return
+        Base.work_status=Base.STATUS.TABLE_TASK
         self.emit(
             Base.EVENT.TABLE_POLISH_START,
             {

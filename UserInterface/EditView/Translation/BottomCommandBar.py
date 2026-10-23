@@ -18,6 +18,9 @@ from ModuleFolders.Infrastructure.TaskConfig.TaskConfig import TaskConfig
 from ModuleFolders.Infrastructure.TaskConfig.TaskType import TaskType
 from ModuleFolders.Log.Log import LogMixin
 from ModuleFolders.Service.Cache.CacheItem import TranslationStatus
+from ModuleFolders.Service.GameProject.CacheBridge import ResetProjectionRefreshRequired
+from ModuleFolders.Service.GameProject.GameCacheIdentity import is_game_projection
+from ModuleFolders.Service.GameProject.GameTaskScope import coordinator_for,event_matches_current
 from UserInterface.Widget.Toast import ToastMixin
 
 
@@ -41,7 +44,10 @@ class BottomCommandBar(ConfigMixin, LogMixin, ToastMixin, Base, CardWidget):
 
         self.ui_update_timer = QTimer(self)
         self.ui_update_timer.setInterval(1000)
-        self.ui_update_timer.timeout.connect(lambda: self.emit(Base.EVENT.TASK_UPDATE, {}))
+        self.ui_update_timer.timeout.connect(self._emit_timer_update)
+        self.subscribe(Base.EVENT.TABLE_TRANSLATE_START,self._table_task_started)
+        self.subscribe(Base.EVENT.TABLE_POLISH_START,self._table_task_started)
+        self.subscribe(Base.EVENT.TABLE_PROOFREAD_START,self._table_task_started)
 
         self.menu = RoundMenu(parent=self)
         self.translate_action = Action(FIF.PLAY, self.tra("开始翻译"))
@@ -138,6 +144,7 @@ class BottomCommandBar(ConfigMixin, LogMixin, ToastMixin, Base, CardWidget):
         self.reset_btn.setEnabled(False)
 
     def task_stop_done(self, event: int, data: dict) -> None:
+        if not event_matches_current(self.cache_manager,data,consume_done=True):return
         if self.ui_update_timer.isActive():
             self.ui_update_timer.stop()
 
@@ -145,7 +152,62 @@ class BottomCommandBar(ConfigMixin, LogMixin, ToastMixin, Base, CardWidget):
         self.update_task_action_button(None)
         Base.work_status = Base.STATUS.IDLE
         self._update_reset_button_state()
-        self.emit(Base.EVENT.TASK_CONTINUE_CHECK, {})
+        self.emit(Base.EVENT.TASK_CONTINUE_CHECK, dict(data))
+        if data.get('error'):self.warning_toast(self.tra('任务未完成'),str(data['error']))
+
+    def _emit_timer_update(self):
+        if is_game_projection(self.cache_manager.project):
+            scope=coordinator_for(self.cache_manager).current
+            if scope is None or not event_matches_current(self.cache_manager,scope.payload()):return
+            self.emit(Base.EVENT.TASK_UPDATE,scope.payload())
+        else:self.emit(Base.EVENT.TASK_UPDATE,{})
+
+    def _table_task_started(self,event,data):
+        if not is_game_projection(self.cache_manager.project) or not event_matches_current(self.cache_manager,data):return
+        scope=coordinator_for(self.cache_manager).current
+        if scope is None or not scope.operation.startswith('table-'):return
+        self.start_btn.setEnabled(False)
+        self.update_task_action_button(self.ACTION_STOP)
+        self.reset_btn.setEnabled(False)
+        self.ui_update_timer.start()
+
+    def _reserve_game_start(self):
+        if type(self.current_mode) is not int or self.current_mode not in (TaskType.TRANSLATION,TaskType.POLISH):
+            self.warning_toast(self.tra('任务未开始'),self.tra('任务模式无效。'))
+            return None
+        if Base.work_status!=Base.STATUS.IDLE:
+            self.warning_toast(self.tra('操作受限'),self.tra('请先停止当前任务。'))
+            return None
+        if not is_game_projection(self.cache_manager.project):
+            Base.work_status=Base.STATUS.TASKING
+            return {}
+        try:
+            operation='translate' if self.current_mode==TaskType.TRANSLATION else 'polish'
+            scope=coordinator_for(self.cache_manager).reserve_current(self.cache_manager,operation,
+                on_claim=lambda:setattr(Base,'work_status',Base.STATUS.TASKING),ui_owned=True)
+        except (ValueError,OSError) as error:
+            self.warning_toast(self.tra('请重新载入工程'),str(error))
+            return None
+        # The queued start must own the busy state before this GUI slot returns.
+        return scope.payload()
+
+    def _publish_start(self,continue_status,scope_data):
+        try:
+            self.emit(Base.EVENT.TASK_START,{'continue_status':continue_status,
+                'current_mode':self.current_mode,**scope_data})
+        except Exception as error:
+            release=not scope_data
+            if scope_data:
+                coordinator=coordinator_for(self.cache_manager);scope=coordinator.current
+                if scope is not None and scope.matches(self.cache_manager.project,scope_data) and coordinator.finish(scope):
+                    release=coordinator.consume_done(self.cache_manager.project,scope_data)
+            if release:
+                Base.work_status=Base.STATUS.IDLE
+                self.start_btn.setEnabled(True);self.update_task_action_button(None)
+                self._update_reset_button_state()
+                self.warning_toast(self.tra('任务未开始'),str(error))
+            return
+        self.ui_update_timer.start()
 
     def command_play(self) -> None:
         if not self._has_valid_api_binding():
@@ -161,19 +223,13 @@ class BottomCommandBar(ConfigMixin, LogMixin, ToastMixin, Base, CardWidget):
             if not message_box.exec():
                 return
 
+        scope_data=self._reserve_game_start()
+        if scope_data is None:return
         self.start_btn.setEnabled(False)
         self.update_task_action_button(self.ACTION_STOP)
         self.reset_btn.setEnabled(False)
 
-        self.emit(
-            Base.EVENT.TASK_START,
-            {
-                "continue_status": False,
-                "current_mode": self.current_mode,
-            },
-        )
-
-        self.ui_update_timer.start()
+        self._publish_start(False,scope_data)
 
     def command_stop(self) -> None:
         content = self.tra("是否确定停止任务") + " ..."
@@ -183,7 +239,12 @@ class BottomCommandBar(ConfigMixin, LogMixin, ToastMixin, Base, CardWidget):
 
         if message_box.exec():
             self.info("正在停止任务 ... ")
-            self.emit(Base.EVENT.TASK_STOP, {})
+            data={}
+            if is_game_projection(self.cache_manager.project):
+                scope=coordinator_for(self.cache_manager).current
+                if scope is None or not event_matches_current(self.cache_manager,scope.payload()):return
+                data=scope.payload()
+            self.emit(Base.EVENT.TASK_STOP, data)
 
     def command_task_action(self) -> None:
         if self.task_action_mode == self.ACTION_CONTINUE:
@@ -192,19 +253,16 @@ class BottomCommandBar(ConfigMixin, LogMixin, ToastMixin, Base, CardWidget):
             self.command_stop()
 
     def command_continue(self) -> None:
+        if is_game_projection(self.cache_manager.project):
+            if not self._has_valid_api_binding():return
+            if self.current_mode==TaskType.POLISH and not self._has_sufficient_translated_lines_for_polish():return
+        scope_data=self._reserve_game_start()
+        if scope_data is None:return
         self.start_btn.setEnabled(False)
         self.update_task_action_button(self.ACTION_STOP)
         self.reset_btn.setEnabled(False)
 
-        self.emit(
-            Base.EVENT.TASK_START,
-            {
-                "continue_status": True,
-                "current_mode": self.current_mode,
-            },
-        )
-
-        self.ui_update_timer.start()
+        self._publish_start(True,scope_data)
 
     def command_reset(self) -> None:
         if not self._can_reset_project(show_message=True):
@@ -225,13 +283,26 @@ class BottomCommandBar(ConfigMixin, LogMixin, ToastMixin, Base, CardWidget):
         else:
             return
 
+        if self.cache_manager.project.get_extra('game_project_root'):
+            content += self.tra("\n已有译文和人工锁会保留；仅未锁定的条目重新进入任务。")
+
         message_box = MessageBox(self.tra("警告"), content, self.window())
         message_box.yesButton.setText(self.tra("确认"))
         message_box.cancelButton.setText(self.tra("取消"))
         if not message_box.exec():
             return
 
-        changed_count = self.cache_manager.reset_project_status(task_mode)
+        try:
+            changed_count = self.cache_manager.reset_project_status(task_mode)
+        except ResetProjectionRefreshRequired as error:
+            self.has_resumable_task = False
+            self.update_task_action_button(None)
+            self._update_reset_button_state()
+            self.warning_toast(self.tra("状态已保存，请重新加载"),str(error))
+            return
+        except (ValueError,OSError) as error:
+            self.error_toast(self.tra("状态重置失败"),str(error))
+            return
         if changed_count <= 0:
             self.info_toast(self.tra("提示"), self.tra("没有可重置的项目状态。"))
             return
@@ -250,6 +321,11 @@ class BottomCommandBar(ConfigMixin, LogMixin, ToastMixin, Base, CardWidget):
         if not self.cache_manager or not self.cache_manager.project:
             if show_message:
                 self.error_toast(self.tra("错误"), self.tra("当前没有可重置的项目缓存。"))
+            return False
+
+        if self.cache_manager.project.get_extra('game_projection_refresh_required'):
+            if show_message:
+                self.warning_toast(self.tra("请重新加载"),self.tra("游戏工程状态已保存，缓存视图需要重新加载。"))
             return False
 
         return True

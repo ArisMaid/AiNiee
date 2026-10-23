@@ -2,10 +2,13 @@ import json
 import os
 import unittest
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import mkdtemp
+from types import SimpleNamespace
 from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+from ModuleFolders.Infrastructure.Platform.QtBootstrap import configure_qt_paths
+configure_qt_paths()
 
 import openpyxl
 from PyQt5.QtCore import QEvent, Qt
@@ -24,8 +27,9 @@ class PromptDictionaryPageTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
-        self.directory = TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
+        retained = Path(__file__).resolve().parents[1] / 'work' / 'acceptance' / 'glossary-retained'
+        retained.mkdir(parents=True,exist_ok=True)
+        self.directory = SimpleNamespace(name=mkdtemp(prefix='glossary-',dir=retained))
         self.config_path = Path(self.directory.name) / "config.json"
         self.config_path.write_text("{}", encoding="utf-8")
         for patcher in (

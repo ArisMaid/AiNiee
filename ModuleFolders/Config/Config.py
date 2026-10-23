@@ -10,6 +10,7 @@ from ModuleFolders.Config.FilePathConfig import (
     resource_path,
 )
 from ModuleFolders.Infrastructure.Platform.RuntimeSetup import migrate_config_if_needed
+from ModuleFolders.Infrastructure.Platform.ConfigFile import write_config_text
 from ModuleFolders.Domain.RegexSwitchHelper import RegexSwitchHelper
 
 
@@ -67,7 +68,7 @@ class ConfigMixin:
                         config = json.load(reader)
                     if not isinstance(config, dict):
                         raise ValueError("config root is not a JSON object")
-                except (json.JSONDecodeError, OSError, ValueError) as error:
+                except (json.JSONDecodeError, ValueError) as error:
                     print(f"[[red]WARNING[/]] Config unreadable, using defaults: {error}")
                     try:
                         os.replace(ConfigMixin.CONFIG_PATH, f"{ConfigMixin.CONFIG_PATH}.corrupt")
@@ -88,10 +89,7 @@ class ConfigMixin:
                         needs_write = True
 
                 if needs_write:
-                    tmp_path = f"{ConfigMixin.CONFIG_PATH}.tmp"
-                    with open(tmp_path, "w", encoding="utf-8") as writer:
-                        writer.write(json.dumps(config, indent=4, ensure_ascii=False))
-                    os.replace(tmp_path, ConfigMixin.CONFIG_PATH)
+                    write_config_text(ConfigMixin.CONFIG_PATH,json.dumps(config,indent=4,ensure_ascii=False))
             else:
                 print("[[red]WARNING[/]] Config file does not exist ...")
 
@@ -134,7 +132,7 @@ class ConfigMixin:
                         old = json.load(reader)
                     if not isinstance(old, dict):
                         old = {}
-                except (json.JSONDecodeError, OSError):
+                except json.JSONDecodeError:
                     old = {}
 
             if old == new:
@@ -144,10 +142,7 @@ class ConfigMixin:
                 old[key] = value
 
             os.makedirs(os.path.dirname(ConfigMixin.CONFIG_PATH), exist_ok=True)
-            tmp_path = f"{ConfigMixin.CONFIG_PATH}.tmp"
-            with open(tmp_path, "w", encoding="utf-8") as writer:
-                writer.write(json.dumps(old, indent=4, ensure_ascii=False))
-            os.replace(tmp_path, ConfigMixin.CONFIG_PATH)
+            write_config_text(ConfigMixin.CONFIG_PATH,json.dumps(old,indent=4,ensure_ascii=False))
 
         return old
 

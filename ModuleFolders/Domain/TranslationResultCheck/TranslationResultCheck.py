@@ -40,15 +40,25 @@ class TranslationResultCheck:
             patterns.extend(exclusion_patterns)
         return patterns
 
-    def check_cache(self, config, cache_data: CacheProject):
+    def check_cache(self, config, cache_data: CacheProject, *, output_path=None):
+        from ModuleFolders.Service.GameProject.GameOutputPolicy import is_game_projection
+        if is_game_projection(cache_data):
+            from ModuleFolders.Service.GameProject.GameQualityReport import create_game_quality_report
+            return create_game_quality_report(self,config,cache_data,output_path)
+        return self._check_cache(config,cache_data)
+
+    def _check_cache(self, config, cache_data: CacheProject, *, collect_only=False, output_path=None):
+        from ModuleFolders.Service.GameProject.GameOutputPolicy import is_game_projection
+        if is_game_projection(cache_data) and collect_only is not True:
+            raise ValueError('GAME_QUALITY_REPORT_REQUIRED: use check_cache for game output')
         error_entries = [] # 存储结构化错误信息
-        output_path = config.label_output_path
+        output_path = config.label_output_path if output_path is None else output_path
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         json_error_filename = f"translation_check_errors_{timestamp}.json" # 错误信息单独json文件
         json_error_filepath = os.path.join(output_path, json_error_filename)
 
 
-        if not os.path.exists(output_path):
+        if not collect_only and not os.path.exists(output_path):
             os.makedirs(output_path, exist_ok=True)
 
         # 获取配置项
@@ -115,10 +125,10 @@ class TranslationResultCheck:
                 f"{performance_level}",
                 "=" * 60 + "\n"
             ]
-            print("\n".join(project_report)) # 项目报告直接输出到控制台
+            if not collect_only:print("\n".join(project_report)) # 项目报告直接输出到控制台
             project_report_logged = True # 标记已输出
         else:
-            print("[WARNING][TranslationResultCheck] 项目报告条目缺少有效的 'start_time'。")
+            if not collect_only:print("[WARNING][TranslationResultCheck] 项目报告条目缺少有效的 'start_time'。")
 
         # 再处理文本检查条目
         for file in cache_data.files.values():
@@ -231,8 +241,10 @@ class TranslationResultCheck:
                  summary_messages.append("ℹ️ 未检查任何文本条目。")
 
             summary_messages.append("=" * 60 + "\n")
-            print("\n".join(summary_messages)) # 控制台输出总结信息
+            if not collect_only:print("\n".join(summary_messages)) # 控制台输出总结信息
 
+
+        if collect_only:return {'errors':error_entries,'summary':check_summary}
 
         # 写入结构化错误信息到 JSON 文件
         if error_entries:

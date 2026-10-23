@@ -137,6 +137,10 @@ class FileOutputer:
 
     # 输出已经翻译文件
     def output_translated_content(self, cache_data: CacheProject, output_path, input_path, config: dict) -> None:
+        from ModuleFolders.Service.GameProject.GameOutputPolicy import is_game_projection,export_game_exchange
+        if is_game_projection(cache_data):
+            export_game_exchange(cache_data,output_path)
+            return
         project_type = cache_data.project_type
         if project_type in self.writer_factory_dict:
             from ModuleFolders.Domain.FileOutputer.DirectoryWriter import DirectoryWriter

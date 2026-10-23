@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   build:
+    if: github.repository == 'NEKOparapa/AiNiee'
     runs-on: windows-latest
 
     steps:
@@ -57,6 +58,7 @@ jobs:
           path: AiNiee-Beta-Windows-Portable.zip
 
   build-macos:
+    if: github.repository == 'NEKOparapa/AiNiee'
     name: Build macOS (${{ matrix.arch }})
     strategy:
       fail-fast: false
@@ -121,6 +123,7 @@ jobs:
           path: dist/AiNiee-Beta-macOS-${{ matrix.arch }}.dmg
 
   release:
+    if: github.repository == 'NEKOparapa/AiNiee'
     name: Publish Beta Release
     needs:
       - build

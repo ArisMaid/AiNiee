@@ -1,3 +1,6 @@
+> 此分支包含 **AiNiee RPG 汉化工作流**。入口、能力范围、运行方法和预发布状态见
+> [README_RPG.md](README_RPG.md)。下文保留 AiNiee 上游项目介绍。
+
 <div align="center">
   <a href="https://github.com/NEKOparapa/AiNiee-chatgpt">
     <img src="https://github.com/NEKOparapa/AiNiee-chatgpt/blob/main/Example%20image/logo.png" width=60%>

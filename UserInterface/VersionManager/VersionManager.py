@@ -112,6 +112,11 @@ class VersionManager(ConfigMixin, LogMixin, ToastMixin, Base):
         return ".zip"
 
     def _find_download_url(self, assets: list[dict]) -> str | None:
+        if os.environ.get('AINIEE_RPG_APP')=='1':
+            for asset in assets:
+                if re.fullmatch(r'AiNieeRPG-[0-9.]+-windows-x64\.zip',asset['name']):
+                    return asset['browser_download_url']
+            return None
         expected_suffix = self._expected_update_asset_suffix()
         for asset in assets:
             if asset["name"].endswith(expected_suffix):

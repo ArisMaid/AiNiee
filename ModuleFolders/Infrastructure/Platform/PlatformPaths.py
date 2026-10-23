@@ -1,4 +1,5 @@
 import platform
+import os
 
 from ModuleFolders.Config.FilePathConfig import MACOS_APP_NAME
 
@@ -16,6 +17,8 @@ def is_windows() -> bool:
 
 
 def release_api_url() -> str:
+    if os.environ.get('AINIEE_RPG_APP')=='1':
+        return 'https://api.github.com/repos/ArisMaid/AiNiee/releases/latest'
     if is_macos():
         return MACOS_RELEASE_API_URL
     return UPSTREAM_RELEASE_API_URL

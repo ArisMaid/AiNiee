@@ -159,6 +159,12 @@ class FileReader():
 
     # 根据文件类型读取文件，并返回缓存对象
     def read_files(self, translation_project, label_input_path, exclude_rule_str):
+        candidate = Path(label_input_path)
+        if translation_project == 'RpgGame' or candidate.name == 'game-project.json':
+            from ModuleFolders.Service.GameProject.GameProjectService import GameProjectService
+            from ModuleFolders.Service.GameProject.CacheBridge import build_projection
+            with GameProjectService(candidate) as service:
+                return build_projection(service.store)
         # 检查传入的项目类型是否已经被注册。
         if translation_project in self.reader_factory_dict:
             from ModuleFolders.Domain.FileReader.DirectoryReader import DirectoryReader
@@ -202,5 +208,6 @@ class FileReader():
         # 把自动检测类型放到第一个
         return [
             ProjectType.AUTO_TYPE,
+            'RpgGame',
             *(project_type for project_type in self.reader_factory_dict.keys() if project_type != ProjectType.AUTO_TYPE)
         ]

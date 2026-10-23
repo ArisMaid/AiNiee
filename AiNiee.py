@@ -193,6 +193,8 @@ if __name__ == "__main__":
         os.environ["QT_SCALE_FACTOR"] = "2.00"
 
     # 创建全局应用对象
+    from ModuleFolders.Infrastructure.Platform.QtBootstrap import configure_qt_paths
+    configure_qt_paths()
     app = QApplication(sys.argv)
     configure_application_metadata(app, app_version)
 
@@ -252,7 +254,7 @@ if __name__ == "__main__":
     # 创建简易执行器对象，并初始化订阅事件
     update_splash_message(splash, "正在加载简易执行器... (60%)", app)
     from ModuleFolders.Service.SimpleExecutor.SimpleExecutor import SimpleExecutor
-    simple_executor = SimpleExecutor()
+    simple_executor = SimpleExecutor(cache_manager=cache_manager)
 
     # 创建任务执行器，并初始化订阅事件(高性能消耗)
     update_splash_message(splash, "正在加载任务执行器... (75%)", app)

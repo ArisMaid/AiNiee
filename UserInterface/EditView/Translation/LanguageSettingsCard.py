@@ -65,6 +65,24 @@ class LanguageSettingsCard(ConfigMixin, CardWidget):
         self.layout.addWidget(self.language_direction_icon, 0, Qt.AlignCenter)
         self.layout.addWidget(self.target_language_combo)
 
+    def apply_config(self, config: dict) -> None:
+        selectors = (
+            ("source_language", self.source_language_combo, self.source_language_pairs),
+            ("target_language", self.target_language_combo, self.target_language_pairs),
+        )
+        for config_key, combo, pairs in selectors:
+            if config_key not in config:
+                continue
+            index = next((index for index, (_, value) in enumerate(pairs) if value == config[config_key]), None)
+            if index is None:
+                continue
+            was_blocked = combo.signalsBlocked()
+            combo.blockSignals(True)
+            try:
+                combo.setCurrentIndex(index)
+            finally:
+                combo.blockSignals(was_blocked)
+
     def _create_language_selector(
         self,
         pairs: list[tuple[str, str]],

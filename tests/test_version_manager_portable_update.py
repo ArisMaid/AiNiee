@@ -14,6 +14,15 @@ class VersionManagerPortableUpdateTests(unittest.TestCase):
     def setUp(self):
         self.manager = VersionManager(version="AiNiee 7.2.4 dev")
 
+    @patch.dict(os.environ, {'AINIEE_RPG_APP':'1'})
+    def test_rpg_update_skips_source_zip_and_uses_fork(self):
+        from ModuleFolders.Infrastructure.Platform.PlatformPaths import release_api_url
+        self.assertIn('ArisMaid/AiNiee',release_api_url())
+        assets=[{'name':'AiNieeRPG-source-7.2.4.1.zip','browser_download_url':'source'},
+            {'name':'AiNieeRPG-7.2.4.1-windows-x64.zip','browser_download_url':'application'}]
+        self.assertEqual(self.manager._find_download_url(assets),'application')
+        self.assertIsNone(self.manager._find_download_url(assets[:1]))
+
     @patch("UserInterface.VersionManager.VersionManager.is_macos", return_value=False)
     def test_non_macos_updates_always_use_zip(self, _mock_is_macos):
         self.assertEqual(self.manager._update_file_suffix(), ".zip")

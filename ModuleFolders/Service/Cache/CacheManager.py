@@ -16,11 +16,13 @@ import rapidjson as json
 from ModuleFolders.Base.Base import Base
 from ModuleFolders.Config.Config import ConfigMixin
 from ModuleFolders.Config.FilePathConfig import project_cache_root
+from ModuleFolders.Infrastructure.Platform.ConfigFile import write_config_text
 from ModuleFolders.Infrastructure.TaskConfig.TaskType import TaskType
 from ModuleFolders.Log.Log import LogMixin
 from ModuleFolders.Service.Cache.CacheFile import CacheFile
 from ModuleFolders.Service.Cache.CacheItem import CacheItem, TranslationStatus
 from ModuleFolders.Service.Cache.CacheProject import CacheProject, CacheProjectStatistics
+from ModuleFolders.Service.GameProject.GameSceneChunks import contiguous_scene_runs
 
 
 class CacheManager(ConfigMixin, LogMixin, Base):
@@ -49,14 +51,23 @@ class CacheManager(ConfigMixin, LogMixin, Base):
 
     def start_interval_saving(self, event: int, data: dict):
         """启动定时保存；继续任务前先把当前项目状态保存并重新载入。"""
-        if data.get("continue_status") is True and self.project:
+        from ModuleFolders.Service.GameProject.GameTaskScope import event_matches_current
+        from ModuleFolders.Service.GameProject.GameCacheIdentity import is_game_projection
+        if not event_matches_current(self,data):return
+        game=is_game_projection(self.project)
+        if not game and data.get("continue_status") is True and self.project:
             current_project_id = self.project.project_id
             self.save_to_file()
             if current_project_id:
                 self.load_from_project_id(current_project_id)
 
-        self.save_to_file_stop_flag = False
-        threading.Thread(target=self.save_to_file_tick, daemon=True).start()
+        with self.file_lock:
+            self.save_to_file_stop_flag = False
+            saver=getattr(self,'_interval_saver_thread',None)
+            if saver is not None and saver.is_alive():return
+            saver=threading.Thread(target=self.save_to_file_tick,daemon=True)
+            self._interval_saver_thread=saver
+            saver.start()
 
     def app_shut_down(self, event: int, data: dict) -> None:
         """应用关闭时通知保存线程停止。"""
@@ -212,33 +223,17 @@ class CacheManager(ConfigMixin, LogMixin, Base):
         cache_dir = cls.get_project_cache_dir(project.project_id)
         cache_path = os.path.join(cache_dir, cls.CACHE_FILENAME)
         stats_path = os.path.join(cache_dir, cls.STATS_FILENAME)
-        cache_tmp_path = cache_path + f".{os.getpid()}.tmp"
-        stats_tmp_path = stats_path + f".{os.getpid()}.tmp"
 
         with cls.CACHE_WRITE_LOCK:
-            try:
-                os.makedirs(cache_dir, exist_ok=True)
+            os.makedirs(cache_dir, exist_ok=True)
 
-                # 先写临时文件，再 replace，避免读到半截文件
-                content_bytes = msgspec.json.encode(project)
-                with open(cache_tmp_path, "wb") as writer:
-                    writer.write(content_bytes)
-                os.replace(cache_tmp_path, cache_path)
+            cache_text = msgspec.json.encode(project).decode("utf-8")
+            write_config_text(cache_path, cache_text)
 
-                # 统计文件单独保存，供启动页快速读取项目概况
-                stats_payload = cls._build_stats_payload(project)
-                with open(stats_tmp_path, "w", encoding="utf-8") as writer:
-                    json.dump(stats_payload, writer, ensure_ascii=False, indent=4)
-                os.replace(stats_tmp_path, stats_path)
-            finally:
-                # 确保异常情况下临时文件也会被清理
-                for tmp_path in (cache_tmp_path, stats_tmp_path):
-                    if not os.path.exists(tmp_path):
-                        continue
-                    try:
-                        os.remove(tmp_path)
-                    except OSError:
-                        pass
+            # 统计文件单独保存，供启动页快速读取项目概况
+            stats_payload = cls._build_stats_payload(project)
+            stats_text = json.dumps(stats_payload, ensure_ascii=False, indent=4)
+            write_config_text(stats_path, stats_text)
 
     @classmethod
     def _read_statistics_payload(cls, stats_path: str) -> dict | None:
@@ -332,8 +327,7 @@ class CacheManager(ConfigMixin, LogMixin, Base):
                 )
             )
 
-        for project_id in invalid_project_ids:
-            cls.delete_project_cache(project_id)
+        # Retain incomplete histories for inspection; listing must not delete data.
 
         # 按项目创建时间倒序排列，最新项目排在最前
         histories.sort(
@@ -343,9 +337,7 @@ class CacheManager(ConfigMixin, LogMixin, Base):
 
         if limit > 0 and len(histories) > limit:
             if prune:
-                # 超过上限时删除更旧的项目缓存
-                for stale_history in histories[limit:]:
-                    cls.delete_project_cache(stale_history["project_id"])
+                # Limit the visible list only. Removal remains an explicit UI action.
                 histories = histories[:limit]
                 return histories
 
@@ -402,26 +394,56 @@ class CacheManager(ConfigMixin, LogMixin, Base):
 
     def load_from_project(self, data: CacheProject):
         """直接从内存中的 CacheProject 对象加载项目。"""
+        from ModuleFolders.Service.GameProject.GameTaskScope import coordinator_for
+        coordinator=coordinator_for(self);coordinator.assert_can_adopt()
+        from ModuleFolders.Service.GameProject.CacheBridge import refresh_projection
+        data = refresh_projection(data)
         self._ensure_project_metadata(data)
-        self.project = data
+        with self.file_lock:coordinator.adopt(lambda:setattr(self,'project',data))
+
+    def _adopt_prepared_game_projection(self, data) -> None:
+        """接管已准备好的游戏项目投影，不再重建投影。"""
+        from ModuleFolders.Service.GameProject.GameTaskScope import coordinator_for
+        coordinator=coordinator_for(self);coordinator.assert_can_adopt()
+        if not isinstance(data, CacheProject):
+            raise ValueError("prepared projection must be a CacheProject")
+
+        if data.project_type != "RpgGame":
+            raise ValueError("prepared projection must be an RpgGame project")
+
+        game_project_root = data.get_extra("game_project_root")
+        if not isinstance(game_project_root, str) or not game_project_root.strip():
+            raise ValueError("prepared projection requires a game_project_root")
+
+        self._ensure_project_metadata(data)
+        with self.file_lock:
+            coordinator.adopt(lambda:setattr(self,'project',data))
 
     def load_from_project_id(self, project_id: str) -> None:
         """根据 project_id 从新的 ProjectCache 目录加载项目。"""
+        from ModuleFolders.Service.GameProject.GameTaskScope import coordinator_for
+        coordinator=coordinator_for(self);coordinator.assert_can_adopt()
         path = self.get_default_cache_path(project_id=project_id)
         with self.file_lock:
             if os.path.isfile(path):
-                self.project = self.read_from_file(path)
+                from ModuleFolders.Service.GameProject.CacheBridge import refresh_projection
+                data=refresh_projection(self.read_from_file(path))
             else:
-                self.project = None
+                data=None
+            coordinator.adopt(lambda:setattr(self,'project',data))
 
     def load_from_file(self, output_path: str = "") -> None:
         """兼容旧调用方的按路径加载接口。"""
+        from ModuleFolders.Service.GameProject.GameTaskScope import coordinator_for
+        coordinator=coordinator_for(self);coordinator.assert_can_adopt()
         path = self.get_default_cache_path(output_path=output_path)
         with self.file_lock:
             if os.path.isfile(path):
-                self.project = self.read_from_file(path)
+                from ModuleFolders.Service.GameProject.CacheBridge import refresh_projection
+                data=refresh_projection(self.read_from_file(path))
             else:
-                self.project = None
+                data=None
+            coordinator.adopt(lambda:setattr(self,'project',data))
 
     @classmethod
     def read_from_file(cls, cache_path) -> CacheProject:
@@ -525,6 +547,9 @@ class CacheManager(ConfigMixin, LogMixin, Base):
 
     def reset_project_status(self, task_mode: int) -> int:
         """批量回退项目翻译/润色状态，并保存缓存。"""
+        from ModuleFolders.Service.GameProject.CacheBridge import route_cache_reset
+        game_count=route_cache_reset(self,task_mode)
+        if game_count is not None:return game_count
         changed_count = self._reset_project_status_in_memory(task_mode)
         if changed_count > 0:
             self.save_to_file()
@@ -584,47 +609,52 @@ class CacheManager(ConfigMixin, LogMixin, Base):
     ) -> Tuple[List[List[CacheItem]], List[List[CacheItem]], List[str]]:
         """按任务类型和限制条件生成待处理片段。"""
         chunks, previous_chunks, file_paths = [], [], []
+        is_game_project = bool(self.project and self.project.get_extra("game_project_root"))
 
         for file in self.project.files.values():
-            # 先按任务模式筛选当前需要处理的条目
-            if task_mode == TaskType.TRANSLATION:
-                items = [item for item in file.items if item.translation_status == TranslationStatus.UNTRANSLATED]
-            elif task_mode == TaskType.POLISH:
-                items = [item for item in file.items if item.translation_status == TranslationStatus.TRANSLATED]
-            else:
-                items = []
+            # Game files are split by contiguous scene first, then filtered.
+            item_runs = contiguous_scene_runs(file.items) if is_game_project else (file.items,)
 
-            if not items:
-                continue
+            for run_items in item_runs:
+                # 先按任务模式筛选当前场景内需要处理的条目
+                if task_mode == TaskType.TRANSLATION:
+                    items = [item for item in run_items if item.translation_status == TranslationStatus.UNTRANSLATED]
+                elif task_mode == TaskType.POLISH:
+                    items = [item for item in run_items if item.translation_status == TranslationStatus.TRANSLATED]
+                else:
+                    items = []
 
-            current_chunk, current_length = [], 0
-            chunk_start_idx_in_filtered_list = 0
+                if not items:
+                    continue
 
-            for i, item in enumerate(items):
-                item_length = item.get_token_count(item.source_text) if limit_type == "token" else 1
+                current_chunk, current_length = [], 0
+                chunk_start_idx_in_filtered_list = 0
 
-                # 新 chunk 开始时，记录它在筛选后列表中的起始索引
-                if not current_chunk:
-                    chunk_start_idx_in_filtered_list = i
+                for i, item in enumerate(items):
+                    item_length = item.get_token_count(item.source_text) if limit_type == "token" else 1
 
-                if current_chunk and (current_length + item_length > limit_count):
+                    # 新 chunk 开始时，记录它在当前场景筛选后列表中的起始索引
+                    if not current_chunk:
+                        chunk_start_idx_in_filtered_list = i
+
+                    if current_chunk and (current_length + item_length > limit_count):
+                        chunks.append(current_chunk)
+                        previous_chunks.append(
+                            self.generate_previous_chunks(items, previous_line_count, chunk_start_idx_in_filtered_list)
+                        )
+                        file_paths.append(file.storage_path)
+                        current_chunk, current_length = [], 0
+                        chunk_start_idx_in_filtered_list = i
+
+                    current_chunk.append(item)
+                    current_length += item_length
+
+                if current_chunk:
                     chunks.append(current_chunk)
                     previous_chunks.append(
                         self.generate_previous_chunks(items, previous_line_count, chunk_start_idx_in_filtered_list)
                     )
                     file_paths.append(file.storage_path)
-                    current_chunk, current_length = [], 0
-                    chunk_start_idx_in_filtered_list = i
-
-                current_chunk.append(item)
-                current_length += item_length
-
-            if current_chunk:
-                chunks.append(current_chunk)
-                previous_chunks.append(
-                    self.generate_previous_chunks(items, previous_line_count, chunk_start_idx_in_filtered_list)
-                )
-                file_paths.append(file.storage_path)
 
         return chunks, previous_chunks, file_paths
 
@@ -650,6 +680,9 @@ class CacheManager(ConfigMixin, LogMixin, Base):
 
     def update_item_text(self, storage_path: str, text_index: int, field_name: str, new_text: str) -> None:
         """更新缓存中指定文本项的原文或译文。"""
+        from ModuleFolders.Service.GameProject.CacheBridge import route_cache_edit
+        if route_cache_edit(self, storage_path, text_index, field_name, new_text):
+            return
         with self.file_lock:
             cache_file = self.project.get_file(storage_path)
             if not cache_file:
@@ -674,8 +707,21 @@ class CacheManager(ConfigMixin, LogMixin, Base):
         text_index: int,
         new_text: str,
         translation_status: int,
-    ) -> None:
-        """更新任务生成的译文，并保留调用方指定的状态。"""
+    ) -> bool | None:
+        """游戏结果仅回读权威状态；普通文档沿用内存更新。"""
+        from ModuleFolders.Service.GameProject.CacheBridge import sync_generated_cache,_selected_item
+        from ModuleFolders.Service.GameProject.GameCacheIdentity import is_game_projection
+        if is_game_projection(self.project,items=(_selected_item(self.project,storage_path,text_index),)):
+            # None means "no status requested" only for the lower-level direct
+            # readback API. A UI event must supply one exact canonical status.
+            if type(translation_status) is not int:return False
+            try:return sync_generated_cache(self,storage_path,text_index,new_text,expected_status=translation_status)
+            except (ValueError,OSError) as error:
+                self.warning('游戏结果通知已拒绝，请重新载入工程：'+str(error))
+                return False
+        from ModuleFolders.Service.GameProject.CacheBridge import route_cache_edit
+        if route_cache_edit(self, storage_path, text_index, 'translated_text', new_text, origin='generated'):
+            return
         with self.file_lock:
             cache_file = self.project.get_file(storage_path)
             if not cache_file:
@@ -782,16 +828,29 @@ class CacheManager(ConfigMixin, LogMixin, Base):
         """获取分析结果附加数据。"""
         if not self.project:
             return {}
+        from ModuleFolders.Service.GameProject.GameCacheIdentity import is_game_projection
+        if is_game_projection(self.project):
+            from ModuleFolders.Service.GameProject.GameAnalysisExecution import game_analysis_data
+            return game_analysis_data(self)
         return self.project.get_extra(self.ANALYSIS_EXTRA_KEY, {}) or {}
 
-    def set_analysis_data(self, analysis_data: dict) -> None:
+    def set_analysis_data(self, analysis_data: dict,*,expected_project=None) -> None:
         """写入分析结果附加数据。"""
         if not self.project:
+            return
+        from ModuleFolders.Service.GameProject.GameCacheIdentity import is_game_projection
+        if is_game_projection(self.project):
+            from ModuleFolders.Service.GameProject.GameAnalysisExecution import game_analysis_data
+            game_analysis_data(self,data=analysis_data,expected_project=expected_project)
             return
         self.project.set_extra(self.ANALYSIS_EXTRA_KEY, analysis_data or {})
 
     def clear_analysis_data(self) -> None:
         """清除分析结果附加数据。"""
         if not self.project:
+            return
+        from ModuleFolders.Service.GameProject.GameCacheIdentity import is_game_projection
+        if is_game_projection(self.project):
+            self.set_analysis_data({},expected_project=self.project)
             return
         self.project.extra.pop(self.ANALYSIS_EXTRA_KEY, None)

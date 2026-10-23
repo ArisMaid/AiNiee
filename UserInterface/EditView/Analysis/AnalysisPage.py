@@ -178,6 +178,7 @@ class AnalysisPage(QFrame, ConfigMixin, LogMixin, ToastMixin, Base):
         QTimer.singleShot(0, lambda: self._apply_initial_table_widths(self.current_view))
 
     def refresh_from_project(self) -> None:
+        self._analysis_project=self.cache_manager.project
         self.analysis_data = self._clone_analysis_data(self.cache_manager.get_analysis_data())
         self._sync_stats()
         self._sync_runtime_state_from_context()
@@ -1211,7 +1212,21 @@ class AnalysisPage(QFrame, ConfigMixin, LogMixin, ToastMixin, Base):
         )
         self._render_header()
         self._update_action_buttons(running=True)
-        self.emit(Base.EVENT.ANALYSIS_TASK_START, {})
+        from ModuleFolders.Service.GameProject.GameCacheIdentity import is_game_projection
+        payload={}
+        if is_game_projection(self.cache_manager.project):
+            from ModuleFolders.Service.GameProject.GameTaskScope import coordinator_for
+            try:
+                scope=coordinator_for(self.cache_manager).reserve_current(self.cache_manager,'analysis',
+                    ui_owned=True,on_claim=lambda:setattr(Base,'work_status',Base.STATUS.ANALYSIS_TASK))
+                payload=scope.payload()
+            except ValueError as error:
+                self.warning_toast(self.tra('无法开始分析'),str(error))
+                self._apply_runtime_state(status_key='error',info_text=str(error))
+                self._render_header()
+                self._update_action_buttons(running=False)
+                return
+        self.emit(Base.EVENT.ANALYSIS_TASK_START, payload)
 
     def stop_analysis(self) -> None:
         if not self._is_analysis_running():
@@ -1234,9 +1249,17 @@ class AnalysisPage(QFrame, ConfigMixin, LogMixin, ToastMixin, Base):
         self._render_header()
         self._update_action_buttons(running=True)
         self.stop_button.setEnabled(False)
-        self.emit(Base.EVENT.TASK_STOP, {})
+        from ModuleFolders.Service.GameProject.GameCacheIdentity import is_game_projection
+        payload={}
+        if is_game_projection(self.cache_manager.project):
+            from ModuleFolders.Service.GameProject.GameTaskScope import coordinator_for
+            scope=coordinator_for(self.cache_manager).current
+            if scope is None or scope.operation!='analysis':return
+            payload=scope.payload()
+        self.emit(Base.EVENT.TASK_STOP, payload)
 
     def on_analysis_task_update(self, event: int, data: dict) -> None:
+        if not self._accept_analysis_event(data):return
         if self.analysis_runtime_state.get("status_key") == "stopping":
             return
 
@@ -1261,14 +1284,23 @@ class AnalysisPage(QFrame, ConfigMixin, LogMixin, ToastMixin, Base):
         self._render_header()
 
     def on_analysis_task_done(self, event: int, data: dict) -> None:
+        if not self._accept_analysis_event(data,done=True):return
         status = str(data.get("status", "error"))
         analysis_data = data.get("analysis_data")
         message = str(data.get("message", "")).strip()
 
         if analysis_data:
+            from ModuleFolders.Service.GameProject.GameCacheIdentity import is_game_projection
+            game=is_game_projection(self.cache_manager.project)
+            if game:
+                try:analysis_data=self.cache_manager.get_analysis_data()
+                except ValueError as error:
+                    self.error_toast(self.tra('请重新加载分析页'),str(error))
+                    self._update_action_buttons()
+                    return
             self.analysis_data = self._clone_analysis_data(analysis_data)
             self._sync_stats()
-            self.cache_manager.set_analysis_data(self._clone_analysis_data(self.analysis_data))
+            if not game:self.cache_manager.set_analysis_data(self._clone_analysis_data(self.analysis_data))
             self._refresh_navigation()
             self._refresh_all_views()
             self._request_cache_save()
@@ -1302,6 +1334,16 @@ class AnalysisPage(QFrame, ConfigMixin, LogMixin, ToastMixin, Base):
             )
             self._render_header()
             self.error_toast(self.tra("失败"), message or self.tra("全文分析失败。"))
+
+    def _accept_analysis_event(self,data,*,done=False):
+        from ModuleFolders.Service.GameProject.GameCacheIdentity import is_game_projection
+        from ModuleFolders.Service.GameProject.GameTaskScope import has_game_scope,event_matches_current,coordinator_for
+        if is_game_projection(self.cache_manager.project) or has_game_scope(data):
+            scope=coordinator_for(self.cache_manager).current
+            if scope is None or scope.operation!='analysis':return False
+            if not event_matches_current(self.cache_manager,data,consume_done=done):return False
+            if done:Base.work_status=Base.STATUS.IDLE
+        return True
 
     def _on_table_item_changed(self, view_name: str, item: QTableWidgetItem) -> None:
         if self._updating_ui:
@@ -2019,7 +2061,12 @@ class AnalysisPage(QFrame, ConfigMixin, LogMixin, ToastMixin, Base):
             return
 
         self._sync_stats()
-        self.cache_manager.set_analysis_data(self._clone_analysis_data(self.analysis_data))
+        try:
+            self.cache_manager.set_analysis_data(self._clone_analysis_data(self.analysis_data),
+                expected_project=getattr(self,'_analysis_project',None))
+        except ValueError as error:
+            self.error_toast(self.tra('分析结果未保存，请重新加载'),str(error))
+            return
         self._request_cache_save()
         if refresh_navigation:
             self._refresh_navigation()
@@ -2032,6 +2079,8 @@ class AnalysisPage(QFrame, ConfigMixin, LogMixin, ToastMixin, Base):
         self._update_action_buttons()
 
     def _request_cache_save(self) -> None:
+        from ModuleFolders.Service.GameProject.GameCacheIdentity import is_game_projection
+        if is_game_projection(getattr(self.cache_manager,'project',None)):return
         if self.cache_manager and self.cache_manager.project:
             self.emit(Base.EVENT.TASK_MANUAL_SAVE_CACHE, {})
 

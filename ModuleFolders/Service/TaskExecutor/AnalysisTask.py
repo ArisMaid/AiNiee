@@ -30,12 +30,16 @@ class AnalysisTask(ConfigMixin, LogMixin, Base):
         ".,!?;:'\"-_=+~`^…—、，。！？；：‘’“”()（）[]【】{}《》<>「」『』〈〉〔〕﹝﹞·•/\\|"
     )
     
-    def __init__(self, cache_manager, set_active_executor, clear_active_executor) -> None:
+    def __init__(self, cache_manager, set_active_executor, clear_active_executor,*,game_session=None,config=None) -> None:
         super().__init__()
+        from ModuleFolders.Service.GameProject.GameCacheIdentity import is_game_projection
+        if is_game_projection(getattr(cache_manager,'project',None)) and game_session is None:
+            raise ValueError('GAME_ANALYSIS_SCOPE_REQUIRED')
+        self.game_session=game_session
         self.cache_manager = cache_manager
         self._set_active_executor = set_active_executor
         self._clear_active_executor = clear_active_executor
-        self.config = TaskConfig()
+        self.config = config if config is not None else TaskConfig()
         self.request_limiter = RequestLimiter()
         self.grouped_stage_two_inputs = {} # 第二阶段的输入结构：{主source: {source, merged_sources, candidates}}
         self.grouped_stage_two_source_aliases = {} # 第二阶段的 source 别名映射：{所有source: 主source}
@@ -49,7 +53,8 @@ class AnalysisTask(ConfigMixin, LogMixin, Base):
         """主入口统筹：准备 -> 第一阶段并发 -> 第二阶段聚合与并发 -> 最终兜底合并 -> 落盘"""
         try:
             # --- [准备阶段] ---
-            Base.work_status = Base.STATUS.ANALYSIS_TASK
+            if self.game_session is not None:self.game_session.check()
+            else:Base.work_status = Base.STATUS.ANALYSIS_TASK
             self.info("开始执行文本分析任务 ...")
             self._emit_progress_update(
                 "prepare",
@@ -80,7 +85,8 @@ class AnalysisTask(ConfigMixin, LogMixin, Base):
                 self.tra("按 token 切分项目原文。"),
             )
             extract_task_token_limit = max(1, int(getattr(self.config, "extract_task_token_limit", 10000)))
-            chunks = self.cache_manager.generate_analysis_source_chunks("token", extract_task_token_limit)
+            chunks = (self.game_session.chunks(extract_task_token_limit) if self.game_session is not None
+                else self.cache_manager.generate_analysis_source_chunks("token", extract_task_token_limit))
             self.info(f"分析文本切分完成，共生成 {len(chunks)} 个分块。")
 
             # --- [第一阶段] ---
@@ -97,8 +103,10 @@ class AnalysisTask(ConfigMixin, LogMixin, Base):
             executor_stage1 = concurrent.futures.ThreadPoolExecutor(max_workers=self.config.actual_thread_counts, thread_name_prefix="analysis_stage1")
             self._set_active_executor(executor_stage1)
             try:
+                if self.game_session is not None:self.game_session.register_pool(executor_stage1)
                 futures_stage1 = [executor_stage1.submit(self._run_first_stage, chunk) for chunk in chunks]
-                for i, future in enumerate(concurrent.futures.as_completed(futures_stage1), 1):
+                from ModuleFolders.Service.GameProject.GameTableExecution import _completed
+                for i, future in enumerate(_completed(futures_stage1), 1):
                     if Base.work_status == Base.STATUS.STOPING: break
                     if result := future.result(): first_stage_results.append(result)
                     self._emit_progress_update(
@@ -132,8 +140,9 @@ class AnalysisTask(ConfigMixin, LogMixin, Base):
                 executor_stage2 = concurrent.futures.ThreadPoolExecutor(max_workers=self.config.actual_thread_counts, thread_name_prefix="analysis_stage2")
                 self._set_active_executor(executor_stage2)
                 try:
+                    if self.game_session is not None:self.game_session.register_pool(executor_stage2)
                     futures_stage2 = [executor_stage2.submit(self._run_second_stage, batch) for batch in reduction_batches]
-                    for i, future in enumerate(concurrent.futures.as_completed(futures_stage2), 1):
+                    for i, future in enumerate(_completed(futures_stage2), 1):
                         if Base.work_status == Base.STATUS.STOPING: break
                         if result := future.result(): second_stage_results.append(result)
                         self._emit_progress_update(
@@ -188,6 +197,10 @@ class AnalysisTask(ConfigMixin, LogMixin, Base):
                 },
             }
             analysis_data["stats"]["total_hits"] = sum(analysis_data["stats"].values())
+
+            if self.game_session is not None:
+                self.game_session.save(analysis_data)
+                return
             
             self.cache_manager.set_analysis_data(analysis_data)
             self.cache_manager.require_save_to_file()
@@ -210,11 +223,15 @@ class AnalysisTask(ConfigMixin, LogMixin, Base):
             )
 
         except Exception as error:
+            if self.game_session is not None:raise
             self.error(f"分析任务执行失败: {error}", error)
             Base.work_status = Base.STATUS.IDLE
             self.emit(Base.EVENT.ANALYSIS_TASK_DONE, {"status": "error", "analysis_data": None, "message": str(error)})
 
     def _handle_stop(self) -> None:
+        if self.game_session is not None:
+            from ModuleFolders.Service.GameProject.JobControl import JobCancelled
+            raise JobCancelled(self.game_session.job_id)
         Base.work_status = Base.STATUS.TASKSTOPPED
         self.info("文本分析任务已停止。")
         self.emit(
@@ -250,6 +267,7 @@ class AnalysisTask(ConfigMixin, LogMixin, Base):
             return result or {"characters": [], "terms": [], "non_translate": []}
             
         except Exception as error:
+            if self.game_session is not None:self.game_session.check()
             self.error(f"第一阶段提取失败: {error}")
             return {"characters": [], "terms": [], "non_translate": []}
 
@@ -338,6 +356,7 @@ class AnalysisTask(ConfigMixin, LogMixin, Base):
             return result or {"characters": [], "terms": []}
             
         except Exception as error:
+            if self.game_session is not None:self.game_session.check()
             self.error(f"第二阶段合并失败: {error}")
             return {"characters": [], "terms": []}
 
@@ -603,7 +622,8 @@ class AnalysisTask(ConfigMixin, LogMixin, Base):
 
     def _emit_progress_update(self, phase: str, phase_label: str, current: int, total: int, message: str, detail: str) -> None:
         """统一的进度更新接口"""
-        self.emit(
+        emit=self.game_session.event if self.game_session is not None else self.emit
+        emit(
             Base.EVENT.ANALYSIS_TASK_UPDATE,
             {
                 "status": "running", "phase": phase, "phase_label": phase_label,
@@ -632,17 +652,18 @@ class AnalysisTask(ConfigMixin, LogMixin, Base):
         last_error = "未知错误"
 
         for attempt in range(1, self.MAX_REQUEST_ATTEMPTS + 1):
+            if self.game_session is not None:self.game_session.check()
             if Base.work_status == Base.STATUS.STOPING:
                 return None
 
             try:
                 # 1. 发送请求
-                requester = LLMRequester()
-                skip, _, response_content, _, _ = requester.sent_request(
-                    [dict(msg) for msg in messages],
-                    system_prompt,
-                    self.config.get_active_platform_configuration(),
-                )
+                if self.game_session is not None:
+                    skip, _, response_content, _, _ = self.game_session.request(messages,system_prompt,self.config)
+                else:
+                    requester = LLMRequester()
+                    skip, _, response_content, _, _ = requester.sent_request(
+                        [dict(msg) for msg in messages],system_prompt,self.config.get_active_platform_configuration())
 
                 if skip:
                     if Base.work_status == Base.STATUS.STOPING: return None
@@ -674,9 +695,12 @@ class AnalysisTask(ConfigMixin, LogMixin, Base):
                         continue
 
                 # 5. 成功：归一化并清洗无用字段，安全返回
+                if self.game_session is not None:
+                    with self.game_session._lock:self.game_session.valid_responses+=1
                 return {field: list(parsed_json.get(field) or []) for field in required_fields}
 
             except Exception as error:
+                if self.game_session is not None:self.game_session.check()
                 if Base.work_status == Base.STATUS.STOPING: return None
                 last_error = str(error)
 
@@ -686,6 +710,8 @@ class AnalysisTask(ConfigMixin, LogMixin, Base):
             else:
                 self.error(f"{stage_label} 第 {attempt} 次尝试失败：{last_error}")
 
+        if self.game_session is not None:
+            with self.game_session._lock:self.game_session.exhausted_groups+=1
         return None
 
     def _extract_json_from_text(self, text: str) -> dict | None:
@@ -704,4 +730,5 @@ class AnalysisTask(ConfigMixin, LogMixin, Base):
         for field in required_fields:
             if field not in parsed: return False, f"缺少必须字段: {field}"
             if not isinstance(parsed.get(field), list): return False, f"字段 {field} 必须是数组"
+            if any(not isinstance(row,dict) for row in parsed[field]):return False, f"字段 {field} 必须包含对象"
         return True, ""

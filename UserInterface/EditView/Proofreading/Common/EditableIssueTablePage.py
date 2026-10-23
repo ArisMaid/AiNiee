@@ -11,6 +11,7 @@ from ModuleFolders.Log.Log import LogMixin
 from ModuleFolders.Service.Cache.CacheItem import TranslationStatus
 from UserInterface.Widget.AutoHeightTableWidget import AutoHeightTableWidget
 from UserInterface.Widget.Toast import ToastMixin
+from UserInterface.EditView.Proofreading.Common.GameTableEvents import table_event_matches,submit_game_table
 
 
 class EditableIssueTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
@@ -31,6 +32,7 @@ class EditableIssueTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
         super().__init__(parent)
         self.results = results
         self.cache_manager = cache_manager
+        self._game_table_project=getattr(cache_manager,'project',None)
         self.update_event = update_event
         self.done_event = done_event
         self.setObjectName("EditableIssueTablePage")
@@ -181,12 +183,8 @@ class EditableIssueTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
             return
 
         new_text = item.text()
-        self.cache_manager.update_item_text(
-            storage_path=file_path,
-            text_index=text_index,
-            field_name=target_field,
-            new_text=new_text,
-        )
+        from ModuleFolders.Service.GameProject.CacheBridge import apply_table_edit
+        if not apply_table_edit(self,item,file_path,text_index,target_field,new_text):return
         self.table.resizeRowToContentsSafe(item.row())
 
         original_index = meta_data.get("original_data_index")
@@ -194,6 +192,7 @@ class EditableIssueTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
             self.results[original_index]["check_text"] = new_text
 
     def _on_table_update(self, event, data: dict):
+        if not table_event_matches(self,data):return
         updated_file_path = data.get("file_path")
         if data.get("target_column_index") != 2:
             return
@@ -221,16 +220,15 @@ class EditableIssueTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
                     continue
 
                 new_text = updated_items[text_index]
-                check_text_item = self.table.item(row, self.COL_TRANS)
-                if check_text_item:
-                    check_text_item.setText(new_text)
-
-                self.cache_manager.update_generated_translation(
+                accepted=self.cache_manager.update_generated_translation(
                     storage_path=updated_file_path,
                     text_index=text_index,
                     new_text=new_text,
                     translation_status=translation_status,
                 )
+                if accepted is False:continue
+                check_text_item = self.table.item(row, self.COL_TRANS)
+                if check_text_item:check_text_item.setText(new_text)
 
                 original_index = meta_data.get("original_data_index")
                 if original_index is not None and 0 <= original_index < len(self.results):
@@ -264,6 +262,9 @@ class EditableIssueTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
             return
 
         tasks_by_file = defaultdict(list)
+        from ModuleFolders.Service.GameProject.GameCacheIdentity import is_game_projection
+        game=is_game_projection(getattr(self.cache_manager,'project',None)) or is_game_projection(getattr(self,'_game_table_project',None))
+        skipped=0
 
         for row in range(self.table.rowCount()):
             meta_data = self._get_row_meta(row)
@@ -272,6 +273,8 @@ class EditableIssueTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
             check_item = self.table.item(row, self.COL_TRANS)
             if not meta_data or not source_item:
                 continue
+            if game and meta_data.get('target_field')!='translated_text':
+                skipped+=1;continue
 
             file_path = meta_data.get("file_path")
             text_index = meta_data.get("text_index")
@@ -288,7 +291,8 @@ class EditableIssueTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
             )
 
         if not tasks_by_file:
-            self.warning_toast(self.tra("提示"), self.tra("当前没有可执行 AI 校对的条目。"))
+            self.warning_toast(self.tra("提示"),self.tra('游戏校对仅修改译文，已保留 {} 条来源字段。').format(skipped)
+                if skipped else self.tra("当前没有可执行 AI 校对的条目。"))
             return
 
         proofread_jobs = []
@@ -306,6 +310,11 @@ class EditableIssueTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
             count += len(items_to_proofread)
 
         if count > 0:
+            submitted=submit_game_table(self,'proofread',proofread_jobs,self.update_event,self.done_event)
+            if submitted is not None:
+                if submitted:self.info_toast(self.tra('提示'),self.tra('AI 自动校对任务已开始，共处理 {} 个条目。').format(count))
+                if skipped:self.warning_toast(self.tra('提示'),self.tra('游戏校对仅修改译文，已保留 {} 条来源字段。').format(skipped))
+                return
             self.emit(
                 Base.EVENT.TABLE_PROOFREAD_START,
                 {
@@ -346,6 +355,11 @@ class EditableIssueTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
         if not tasks_by_file:
             return
 
+        submitted=submit_game_table(self,'translate',[{'file_path':path,'items_to_translate':items}
+            for path,items in tasks_by_file.items()],self.update_event,self.done_event)
+        if submitted is not None:
+            if submitted:self.info_toast(self.tra('提示'),self.tra('已提交 {} 个条目的翻译任务。').format(sum(map(len,tasks_by_file.values()))))
+            return
         Base.work_status = Base.STATUS.TABLE_TASK
         count = 0
         for file_path, items_to_translate in tasks_by_file.items():
@@ -370,6 +384,7 @@ class EditableIssueTablePage(ConfigMixin, LogMixin, ToastMixin, Base, QWidget):
             self.info_toast(self.tra("提示"), self.tra("已提交 {} 个条目的翻译任务。").format(count))
 
     def _on_task_done(self, event, data: dict):
+        if not table_event_matches(self,data):return
         if not self.isVisible():
             return
 

@@ -14,6 +14,8 @@ class ProofreadTask(ConfigMixin, LogMixin, Base):
     MAX_REQUEST_ATTEMPTS = 2  # 单条数据最大重试次数
 
     def __init__(self, task_data: dict, set_active_executor, clear_active_executor) -> None:
+        from ModuleFolders.Service.GameProject.GameTaskScope import has_game_scope
+        if has_game_scope(task_data):raise ValueError('GAME_PROOFREAD_REQUIRES_NATIVE_EXECUTION')
         super().__init__()
         self.task_data = task_data or {}
         self._set_active_executor = set_active_executor

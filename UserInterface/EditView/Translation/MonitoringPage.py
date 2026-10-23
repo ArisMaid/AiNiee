@@ -8,11 +8,13 @@ from ModuleFolders.Config.Config import ConfigMixin
 from UserInterface.Widget.DashboardCard import DashboardCard
 from UserInterface.Widget.ProgressRingCard import ProgressRingCard
 from UserInterface.Widget.CombinedLineCard import CombinedLineCard
+from ModuleFolders.Service.GameProject.GameTaskScope import event_matches_current
 
 # 监控页面
 class MonitoringPage(ConfigMixin, Base, QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None,*,cache_manager=None):
         super().__init__(parent)
+        self.cache_manager=cache_manager
         # 设置主容器
         self.container = QVBoxLayout(self)
         self.container.setSpacing(8)
@@ -155,7 +157,22 @@ class MonitoringPage(ConfigMixin, Base, QWidget):
 
     # 监控页面更新事件
     def data_update(self, event: int, data: dict) -> None:
-        if Base.work_status in (Base.STATUS.STOPING, Base.STATUS.TASKING):
+        if not event_matches_current(self.cache_manager,data):return
+        execution=data.get('game_execution_id')
+        if execution is not None:
+            same_run=execution==getattr(self,'_game_progress_execution',None)
+            previous=getattr(self,'_game_progress_revision',-1) if same_run else -1
+            metrics=any(key in data for key in ('line','total_line','start_time','token',
+                'total_completion_tokens','total_requests','error_requests','time'))
+            revision=data.get('game_progress_revision')
+            if metrics or 'game_progress_revision' in data:
+                if type(revision) is not int or revision<0 or revision<=previous:return
+            if not same_run:
+                self.data={}
+                self._game_progress_execution=execution
+                self._game_progress_revision=-1
+            if metrics or 'game_progress_revision' in data:self._game_progress_revision=revision
+        if execution is not None or Base.work_status in (Base.STATUS.STOPING, Base.STATUS.TASKING,Base.STATUS.TABLE_TASK):
             self.update_time(event, data)
             self.update_line(event, data)
             self.update_token(event, data)
@@ -299,7 +316,7 @@ class MonitoringPage(ConfigMixin, Base, QWidget):
             self.ring.set_value(int(percent * 10000))
             info_cont = self.tra("停止中") + "\n" + f"{percent * 100:.2f}%"
             self.ring.set_format(info_cont)
-        elif Base.work_status == Base.STATUS.TASKING:
+        elif Base.work_status in (Base.STATUS.TASKING,Base.STATUS.TABLE_TASK):
             percent = self.data.get("line", 0) / max(1, self.data.get("total_line", 0))
             self.ring.set_value(int(percent * 10000))
             info_cont = self.tra("任务中") + "\n" + f"{percent * 100:.2f}%"

@@ -62,8 +62,23 @@ class TranslatorTask(LogMixin, Base):
     def set_previous_items(self, previous_items: list[CacheItem]) -> None:
         self.previous_items = previous_items
 
+    def bind_game_execution(self,scope,on_job,on_job_done):
+        self._game_execution_scope=scope
+        self._game_on_job=on_job
+        self._game_on_job_done=on_job_done
+
     # 消息构建预处理
-    def prepare(self, target_platform: str) -> None:
+    def prepare(self, target_platform: str, *, game_preparation=None) -> None:
+
+        from ModuleFolders.Service.GameProject.GameBatchRunner import is_game_batch, GameBatchRunner
+        self._game_batch = None
+        if is_game_batch(self.items):
+            self._game_batch = GameBatchRunner(self.items, self.config, self.request_limiter,
+                preparation=game_preparation, previous_items=getattr(self,'previous_items',[]),
+                execution_scope=getattr(self,'_game_execution_scope',None))
+            self.request_tokens_consume = self._game_batch.request_tokens_consume
+            self.row_count = len(self.items)
+            return
 
         # 生成上文文本列表
         self.previous_text_list = [v.source_text for v in self.previous_items]
@@ -119,6 +134,10 @@ class TranslatorTask(LogMixin, Base):
 
     # 单请求翻译任务
     def unit_translation_task(self) -> dict:
+        if getattr(self, '_game_batch', None) is not None:
+            if self._game_batch.execution_scope is not None:
+                return self._game_batch.run(on_job=self._game_on_job,on_job_done=self._game_on_job_done)
+            return self._game_batch.run()
         # 任务开始的时间
         task_start_time = time.time()
 

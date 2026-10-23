@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "game_release": "selenoxia-test-0.141",
+  "engine": "rpgmaker-mz",
+  "engine_version": "1.7.0",
+  "source_manifest_sha256": "51b0a20d964366729ff56bd97ccdc9772c32408f65c69a886d03cead7445ab1f",
+  "profile_hash": "71ccbe1830d133a6b00e753586c73ca992cb3c3fca5815b1dc179aad2a08a9d6",
+  "authorization": {
+    "source": "Direct user reply in current thread on 2026-10-23",
+    "choice": "Accept original baseline exceptions",
+    "criterion": "No newly introduced JSON/JS syntax errors; exactly two unchanged original event-script blocks excepted"
+  },
+  "original": {
+    "json_files": 181,
+    "js_files": 188,
+    "data_json": 178,
+    "maps": 151,
+    "enabled_plugins": 168,
+    "json_parse_errors": 0,
+    "file_JS_parse_errors": 0,
+    "event_blocks": 1739,
+    "event_parse_errors": 2
+  },
+  "output": {
+    "json_files": 183,
+    "js_files": 189,
+    "data_json": 178,
+    "maps": 151,
+    "enabled_plugins": 168,
+    "json_parse_errors": 0,
+    "file_JS_parse_errors": 0,
+    "event_blocks": 1739,
+    "event_parse_errors": 2
+  },
+  "new_syntax_errors": 0,
+  "exceptions": [
+    {
+      "file": "data/CommonEvents.json",
+      "pointer": "/1/list/0",
+      "common_event_id": 1,
+      "script_sha256": "3510274fb762167c38ccbf10d02c3552a215cfd285d5e87662c8ffbb579db7f6",
+      "command_block_sha256": "9802f790f6038aa68106cceb394aa50b280269382066f1bf257352b6ebccddf6",
+      "script_lines": 1,
+      "parse_error": {
+        "message": "Unexpected token (1:0)",
+        "line": 1,
+        "column": 0
+      },
+      "source_file_sha256": "e8e37bcfee0c74183586fda1259836b03fa3755c0370fc9b7022e7bde48e73dc",
+      "output_file_sha256": "9461153e41c7ff3740138ac19f7fd4ec4a4ba9405528f565adbcb8886e11bf11",
+      "output_script_unchanged": true,
+      "original_trigger": 0,
+      "source": "Original developer draft; direct user authorization on 2026-10-23 permits this exact baseline exception"
+    },
+    {
+      "file": "data/CommonEvents.json",
+      "pointer": "/45/list/1",
+      "common_event_id": 45,
+      "script_sha256": "7b4c4438d32bcee3d1fdd64d8c38dec6753e93253d55bbfa79b789df57f149eb",
+      "command_block_sha256": "b7a87e7fed087efebbf298aa0bb6305cf5c9932bd8f05ecc4f6c8779e04843bb",
+      "script_lines": 2,
+      "parse_error": {
+        "message": "Unexpected token (2:3)",
+        "line": 2,
+        "column": 3
+      },
+      "source_file_sha256": "e8e37bcfee0c74183586fda1259836b03fa3755c0370fc9b7022e7bde48e73dc",
+      "output_file_sha256": "9461153e41c7ff3740138ac19f7fd4ec4a4ba9405528f565adbcb8886e11bf11",
+      "output_script_unchanged": true,
+      "original_trigger": 0,
+      "source": "Original developer draft; direct user authorization on 2026-10-23 permits this exact baseline exception"
+    }
+  ],
+  "parser": "Acorn ecmaVersion2022; event eval bodies allow function-level return",
+  "parser_version": "8.19.0",
+  "generated_output_text_files": [
+    "js/AiNieeFontAliases.js",
+    "rpg-build-complete.json",
+    "rpg-build-manifest.json"
+  ],
+  "exceptions_do_not_cover_other_blocks_or_future_sources": true,
+  "game_code_modified_for_exception": false,
+  "source_and_output_read_only": true,
+  "provider_requests": 0,
+  "new_test_suites": 0,
+  "limits": [
+    "No game code was executed by this syntax audit",
+    "No automatic or future exception expansion",
+    "Changing either block, its position, or source release invalidates the exception; repeat review",
+    "All statements about other semantic, layout, recovery and runtime gates depend on their separate evidence"
+  ]
+}

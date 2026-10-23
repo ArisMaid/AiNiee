@@ -1,0 +1,10 @@
+{
+  "python": "开发环境/Python环境/Scripts/python.exe",
+  "js": "开发环境/JavaScript依赖",
+  "translatorpp": "外部工具/Translator++",
+  "ocr": "外部工具/OCR工具",
+  "work": "开发记录/运行工作区",
+  "dist": "交付文件/构建输出",
+  "cache": "临时缓存/Python字节码",
+  "sandbox": "验收证据/沙盒验收"
+}

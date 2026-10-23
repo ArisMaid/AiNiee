@@ -24,7 +24,7 @@ class TranslationPage(ConfigMixin, Base, QWidget):
         layout.setContentsMargins(0, 12, 0, 0)
         layout.setSpacing(0)
 
-        self.monitoring_page = MonitoringPage(self)
+        self.monitoring_page = MonitoringPage(self,cache_manager=cache_manager)
         self.monitoring_page.setStyleSheet("QWidget { background: transparent; }")
         self.scroller = SingleDirectionScrollArea(self, orient=Qt.Vertical)
         self.scroller.setWidgetResizable(True)

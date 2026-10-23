@@ -1,0 +1,19 @@
+"""Capability identifiers shared by project and profile format gates."""
+SUPPORTED_FEATURES=(
+    'analysis_metadata_v1',
+    'display_line_count_v1',
+    'display_value_constraints_v1',
+    'event_js_string_v1',
+    'event_js_line_v1',
+    'event_js_spans_v1',
+    'font_aliases_v1',
+    'js_scoped_object_v1',
+    'js_display_fragments_v1',
+    'js_nested_json_v1',
+    'js_source_spans_v1',
+    'js_fixed_affixes_v1',
+    'literal_tokens_v1',
+    'note_tag_text_v1',
+    'note_tag_groups_v1',
+    'note_last_value_v1',
+)

@@ -14,6 +14,10 @@ class TextFilter:
         self.special_text_filter = SpecialTextFilter()
 
     def filter_project(self, config: TaskConfig, project: CacheProject) -> None:
+        if project.get_extra('game_project_root'):
+            # The extractor already classified display text. General code and
+            # language heuristics must not discard short CJK names or controls.
+            return
         self.general_text_filter.filter_text(project)
 
         if getattr(config, "language_filter_switch", True):

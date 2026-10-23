@@ -14,6 +14,9 @@ from UserInterface.EditView.Startup.StartupPage import StartupPage
 from UserInterface.EditView.Translation.TranslationPage import TranslationPage
 from UserInterface.Native.FileDialogProvider import get_existing_directory
 from UserInterface.Widget.Toast import ToastMixin
+from ModuleFolders.Service.GameProject.GameTaskScope import event_matches_current,has_game_scope,game_task_progress
+from ModuleFolders.Service.GameProject.GameCacheIdentity import is_game_projection
+from ModuleFolders.Infrastructure.TaskConfig.TaskType import TaskType
 
 
 class WorkflowHeaderBar(ConfigMixin, CardWidget):
@@ -69,6 +72,7 @@ class WorkflowHeaderBar(ConfigMixin, CardWidget):
 class EditViewPage(ConfigMixin, LogMixin, ToastMixin, Base, QFrame):
     continueCardStateChanged = pyqtSignal(bool, str)
     resumableStateChanged = pyqtSignal(bool)
+    continueCheckResult = pyqtSignal(object)
 
     ROUTE_ANALYSIS = "analysis"
     ROUTE_TRANSLATION = "translation"
@@ -80,6 +84,7 @@ class EditViewPage(ConfigMixin, LogMixin, ToastMixin, Base, QFrame):
 
         self.cache_manager = cache_manager
         self.file_reader = file_reader
+        self._continue_check_generation=0
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -134,6 +139,7 @@ class EditViewPage(ConfigMixin, LogMixin, ToastMixin, Base, QFrame):
         self.workflow_header.stepChanged.connect(self.switch_workflow_page)
         self.continueCardStateChanged.connect(self._on_continue_card_state_changed)
         self.resumableStateChanged.connect(self.translation_page.enable_continue_button)
+        self.continueCheckResult.connect(self._apply_continue_check_result)
 
         self.subscribe(Base.EVENT.TASK_CONTINUE_CHECK, self.task_continue_check)
 
@@ -150,9 +156,24 @@ class EditViewPage(ConfigMixin, LogMixin, ToastMixin, Base, QFrame):
         self.workflow_stacked_widget.setCurrentWidget(widget)
 
     def task_continue_check(self, event: int, data: dict) -> None:
-        threading.Thread(target=self.task_continue_check_target, daemon=True).start()
+        if has_game_scope(data) and not event_matches_current(self.cache_manager,data):return
+        snapshot=self._capture_continue_check()
+        threading.Thread(target=self.task_continue_check_target,args=(snapshot,),daemon=True).start()
 
-    def task_continue_check_target(self) -> None:
+    def _continue_project_key(self,project):
+        if project is None:return None
+        return (project.project_id,project.get_extra('game_project_root'),
+            project.get_extra('game_dataset_revision'),project.get_extra('game_projection_refresh_required'))
+
+    def _capture_continue_check(self):
+        self._continue_check_generation+=1
+        coordinator=getattr(self.cache_manager,'_game_task_coordinator',None)
+        project=self.cache_manager.project
+        return {'generation':self._continue_check_generation,'project':project,
+            'project_key':self._continue_project_key(project),'scope':coordinator.current if coordinator else None}
+
+    def task_continue_check_target(self,snapshot=None) -> None:
+        if snapshot is None:return
         time.sleep(0.5)
         continue_visible = False
         continue_enabled = False
@@ -173,13 +194,30 @@ class EditViewPage(ConfigMixin, LogMixin, ToastMixin, Base, QFrame):
             except Exception as error:
                 print(f"[ERROR] 读取项目缓存历史失败: {error}")
 
-        self.continueCardStateChanged.emit(continue_visible, project_name)
-        self.resumableStateChanged.emit(continue_enabled)
+        self.continueCheckResult.emit({**snapshot,'visible':continue_visible,
+            'project_name':project_name,'enabled':continue_enabled})
+
+    def _apply_continue_check_result(self,result):
+        project=self.cache_manager.project
+        coordinator=getattr(self.cache_manager,'_game_task_coordinator',None)
+        if (result['generation']!=self._continue_check_generation or project is not result['project']
+                or self._continue_project_key(project)!=result['project_key']
+                or (coordinator.current if coordinator else None) is not result['scope']
+                or Base.work_status!=Base.STATUS.IDLE):return
+        enabled=result['enabled']
+        if is_game_projection(project):
+            mode=self.translation_page.bottom_bar.current_mode
+            progress=game_task_progress(project,'polish' if mode==TaskType.POLISH else 'translate')
+            enabled=(not project.get_extra('game_projection_refresh_required')
+                and progress['pending']>0 and progress['completed']>0)
+        self.continueCardStateChanged.emit(result['visible'],result['project_name'])
+        self.resumableStateChanged.emit(enabled)
 
     def _on_continue_card_state_changed(self, show: bool, project_name: str) -> None:
         self.startup_page.show_continue_button(show)
 
     def on_folder_selected(self, project_name: str, project_mode: str) -> None:
+        self._continue_check_generation+=1
         file_hierarchy = self.cache_manager.get_file_hierarchy()
 
         self.proofreading_page.clear_tabs()

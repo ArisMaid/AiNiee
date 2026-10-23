@@ -1,0 +1,410 @@
+{
+  "units": [
+    {
+      "unit_id": "3dd21ea9-e663-5d00-9d97-6b9c0bbdde29",
+      "kind": "Items.name",
+      "source_text": "回復薬",
+      "scene_id": "Items:1",
+      "context": {
+        "table": "Items",
+        "entry_id": 1,
+        "field": "name"
+      },
+      "occurrences": [
+        {
+          "occurrence_id": "93ed1c9a-c42e-5afd-91ab-48245145d57e",
+          "relative_path": "data/Items.json",
+          "locator": {
+            "pointer": "/1/name"
+          },
+          "expected_value_hash": "16a90cb15bf8ee9bdd647e457c9513f8d4657fcfc13a9ce749b30b6e98c3b52e",
+          "adapter_id": "rpgmaker-native",
+          "role": "name",
+          "ordinal": 0
+        }
+      ],
+      "token_policy_id": "rpgmaker-v1",
+      "source_hash": "16a90cb15bf8ee9bdd647e457c9513f8d4657fcfc13a9ce749b30b6e98c3b52e"
+    },
+    {
+      "unit_id": "bee320ed-80e1-5910-b7f0-67c7215cb445",
+      "kind": "Items.description",
+      "source_text": "回復する",
+      "scene_id": "Items:1",
+      "context": {
+        "table": "Items",
+        "entry_id": 1,
+        "field": "description"
+      },
+      "occurrences": [
+        {
+          "occurrence_id": "fbcdf4a5-7ffe-57aa-80ca-6daac64d8a64",
+          "relative_path": "data/Items.json",
+          "locator": {
+            "pointer": "/1/description"
+          },
+          "expected_value_hash": "b43abc3109e6794b06100428acfd35ffa9a2ad3e5085a5ccec397ef0f626c258",
+          "adapter_id": "rpgmaker-native",
+          "role": "description",
+          "ordinal": 0
+        }
+      ],
+      "token_policy_id": "rpgmaker-v1",
+      "source_hash": "b43abc3109e6794b06100428acfd35ffa9a2ad3e5085a5ccec397ef0f626c258"
+    },
+    {
+      "unit_id": "1502641d-9654-5050-b3f0-4eeb03f1f2da",
+      "kind": "map_display_name",
+      "source_text": "学校",
+      "scene_id": "Map001",
+      "context": {
+        "table": "Map",
+        "map_id": "Map001"
+      },
+      "occurrences": [
+        {
+          "occurrence_id": "33634fcc-0dc1-531c-8e70-7b802c2d5491",
+          "relative_path": "data/Map001.json",
+          "locator": {
+            "pointer": "/displayName"
+          },
+          "expected_value_hash": "dc6e2aafeb9e125b69d1b143f05c66414e6e1a4f46c163a52a6d289efeef27c7",
+          "adapter_id": "rpgmaker-native",
+          "role": "map_display_name",
+          "ordinal": 0
+        }
+      ],
+      "token_policy_id": "rpgmaker-v1",
+      "source_hash": "dc6e2aafeb9e125b69d1b143f05c66414e6e1a4f46c163a52a6d289efeef27c7"
+    },
+    {
+      "unit_id": "6ae8a4e3-a9f5-5d2d-929b-2057668b1169",
+      "kind": "speaker",
+      "source_text": "先生",
+      "scene_id": "Map001:event:1:page:0",
+      "context": {
+        "code": 101,
+        "command_index": 0,
+        "speaker": "先生"
+      },
+      "occurrences": [
+        {
+          "occurrence_id": "ba215169-c526-530f-a130-035fd997cf28",
+          "relative_path": "data/Map001.json",
+          "locator": {
+            "pointer": "/events/1/pages/0/list/0/parameters/4"
+          },
+          "expected_value_hash": "cd98e43da31bb1b90dc152851c85c7d266d47ba97bc5ff7bd137c5920429d467",
+          "adapter_id": "rpgmaker-native",
+          "role": "speaker",
+          "ordinal": 0
+        }
+      ],
+      "token_policy_id": "rpgmaker-v1",
+      "source_hash": "cd98e43da31bb1b90dc152851c85c7d266d47ba97bc5ff7bd137c5920429d467"
+    },
+    {
+      "unit_id": "0988c2bd-b511-5ed1-903c-89bfb7f0b11d",
+      "kind": "dialogue",
+      "source_text": "\\N[1]こんにちは",
+      "scene_id": "Map001:event:1:page:0",
+      "context": {
+        "code": 401,
+        "command_index": 1,
+        "speaker": "先生"
+      },
+      "occurrences": [
+        {
+          "occurrence_id": "0cdbf17d-462f-5603-98bb-baeceaee0b6e",
+          "relative_path": "data/Map001.json",
+          "locator": {
+            "pointer": "/events/1/pages/0/list/1/parameters/0"
+          },
+          "expected_value_hash": "d0668bb1d5ec2b1f9e34d09c77aed08699170cb136814dd9ade1cb97677ac444",
+          "adapter_id": "rpgmaker-native",
+          "role": "dialogue",
+          "ordinal": 0
+        }
+      ],
+      "token_policy_id": "rpgmaker-v1",
+      "source_hash": "d0668bb1d5ec2b1f9e34d09c77aed08699170cb136814dd9ade1cb97677ac444"
+    },
+    {
+      "unit_id": "d60e3c91-41b1-5347-91e3-e2967ca1cff1",
+      "kind": "choice",
+      "source_text": "はい",
+      "scene_id": "Map001:event:1:page:0",
+      "context": {
+        "code": 102,
+        "command_index": 2,
+        "speaker": "先生",
+        "choice_question_pointers": [
+          "/events/1/pages/0/list/1/parameters/0"
+        ]
+      },
+      "occurrences": [
+        {
+          "occurrence_id": "0a638922-34ee-59ce-baed-0f5d104c6007",
+          "relative_path": "data/Map001.json",
+          "locator": {
+            "pointer": "/events/1/pages/0/list/2/parameters/0/0"
+          },
+          "expected_value_hash": "8f90d85ec13a0b1b12d81203f2f3262ca156028a94aeaf91ae52fcd5a9de4170",
+          "adapter_id": "rpgmaker-native",
+          "role": "choice",
+          "ordinal": 0
+        },
+        {
+          "occurrence_id": "0d167d03-9885-5bef-a028-654b22da21ac",
+          "relative_path": "data/Map001.json",
+          "locator": {
+            "pointer": "/events/1/pages/0/list/3/parameters/1"
+          },
+          "expected_value_hash": "8f90d85ec13a0b1b12d81203f2f3262ca156028a94aeaf91ae52fcd5a9de4170",
+          "adapter_id": "rpgmaker-native",
+          "role": "choice_branch",
+          "ordinal": 1
+        }
+      ],
+      "token_policy_id": "rpgmaker-v1",
+      "source_hash": "8f90d85ec13a0b1b12d81203f2f3262ca156028a94aeaf91ae52fcd5a9de4170"
+    },
+    {
+      "unit_id": "c05333fd-b05e-5a76-8a9d-c6f76b297ac6",
+      "kind": "choice",
+      "source_text": "いいえ",
+      "scene_id": "Map001:event:1:page:0",
+      "context": {
+        "code": 102,
+        "command_index": 2,
+        "speaker": "先生",
+        "choice_question_pointers": [
+          "/events/1/pages/0/list/1/parameters/0"
+        ]
+      },
+      "occurrences": [
+        {
+          "occurrence_id": "12f9dd59-4af6-519f-a44e-07ebbadf4e19",
+          "relative_path": "data/Map001.json",
+          "locator": {
+            "pointer": "/events/1/pages/0/list/2/parameters/0/1"
+          },
+          "expected_value_hash": "48ef2b674823d03d45863e46e4706682f9588ef1d13921134ae3a8508483ffb5",
+          "adapter_id": "rpgmaker-native",
+          "role": "choice",
+          "ordinal": 0
+        },
+        {
+          "occurrence_id": "c665d676-e9ed-5c50-8efb-b0dc08b617ba",
+          "relative_path": "data/Map001.json",
+          "locator": {
+            "pointer": "/events/1/pages/0/list/5/parameters/1"
+          },
+          "expected_value_hash": "48ef2b674823d03d45863e46e4706682f9588ef1d13921134ae3a8508483ffb5",
+          "adapter_id": "rpgmaker-native",
+          "role": "choice_branch",
+          "ordinal": 1
+        }
+      ],
+      "token_policy_id": "rpgmaker-v1",
+      "source_hash": "48ef2b674823d03d45863e46e4706682f9588ef1d13921134ae3a8508483ffb5"
+    },
+    {
+      "unit_id": "2e47fb58-aa9b-531f-81b6-fd38221edc65",
+      "kind": "dialogue",
+      "source_text": "はい",
+      "scene_id": "Map001:event:1:page:0",
+      "context": {
+        "code": 401,
+        "command_index": 4,
+        "speaker": "先生"
+      },
+      "occurrences": [
+        {
+          "occurrence_id": "58479872-9558-5f72-876b-aaf15aaef9a4",
+          "relative_path": "data/Map001.json",
+          "locator": {
+            "pointer": "/events/1/pages/0/list/4/parameters/0"
+          },
+          "expected_value_hash": "8f90d85ec13a0b1b12d81203f2f3262ca156028a94aeaf91ae52fcd5a9de4170",
+          "adapter_id": "rpgmaker-native",
+          "role": "dialogue",
+          "ordinal": 0
+        }
+      ],
+      "token_policy_id": "rpgmaker-v1",
+      "source_hash": "8f90d85ec13a0b1b12d81203f2f3262ca156028a94aeaf91ae52fcd5a9de4170"
+    },
+    {
+      "unit_id": "daf5c0f6-a508-5b9d-b0d1-b78b17dbab75",
+      "kind": "dialogue",
+      "source_text": "元気ですか",
+      "scene_id": "profile:message",
+      "context": {
+        "table": "profile",
+        "rule_id": "message",
+        "selector": "/*/message"
+      },
+      "occurrences": [
+        {
+          "occurrence_id": "170f2736-662a-594a-8e85-c286e1258e97",
+          "relative_path": "data/RandomTalk.json",
+          "locator": {
+            "pointer": "/1/message"
+          },
+          "expected_value_hash": "deea8022cb693e469cb7187567f3bc91e5bf4ca2c7a8b5aebc9e327cf8a1410e",
+          "adapter_id": "rpgmaker-native",
+          "role": "dialogue",
+          "ordinal": 0
+        }
+      ],
+      "token_policy_id": "rpgmaker-v1",
+      "source_hash": "deea8022cb693e469cb7187567f3bc91e5bf4ca2c7a8b5aebc9e327cf8a1410e"
+    },
+    {
+      "unit_id": "325b0a34-6069-52ad-b106-4f64c3cca633",
+      "kind": "system.gameTitle",
+      "source_text": "テスト",
+      "scene_id": "system",
+      "context": {
+        "table": "System",
+        "field": "gameTitle"
+      },
+      "occurrences": [
+        {
+          "occurrence_id": "083753d5-ef93-547d-8ca3-deaa2bcab677",
+          "relative_path": "data/System.json",
+          "locator": {
+            "pointer": "/gameTitle"
+          },
+          "expected_value_hash": "8a535a3f4dcd2c396db11b7c1e54221d04375c9f9be96bce47dc2fdb237e86c9",
+          "adapter_id": "rpgmaker-native",
+          "role": "system.gameTitle",
+          "ordinal": 0
+        }
+      ],
+      "token_policy_id": "rpgmaker-v1",
+      "source_hash": "8a535a3f4dcd2c396db11b7c1e54221d04375c9f9be96bce47dc2fdb237e86c9"
+    },
+    {
+      "unit_id": "3c03f9f5-df60-5286-9a24-d2bf684ab519",
+      "kind": "system.currencyUnit",
+      "source_text": "円",
+      "scene_id": "system",
+      "context": {
+        "table": "System",
+        "field": "currencyUnit"
+      },
+      "occurrences": [
+        {
+          "occurrence_id": "10aa0e1f-4a6f-58ec-975d-1eafb1fff500",
+          "relative_path": "data/System.json",
+          "locator": {
+            "pointer": "/currencyUnit"
+          },
+          "expected_value_hash": "08002c6675f7436cb3d3f94de4e300a9c18e134a8ace3375e4c1d628578753c9",
+          "adapter_id": "rpgmaker-native",
+          "role": "system.currencyUnit",
+          "ordinal": 0
+        }
+      ],
+      "token_policy_id": "rpgmaker-v1",
+      "source_hash": "08002c6675f7436cb3d3f94de4e300a9c18e134a8ace3375e4c1d628578753c9"
+    },
+    {
+      "unit_id": "0c1c6cdd-f39b-5d3e-af2a-9ee6534fae9d",
+      "kind": "system.term",
+      "source_text": "セーブ",
+      "scene_id": "system",
+      "context": {
+        "table": "System",
+        "field": "/terms/save"
+      },
+      "occurrences": [
+        {
+          "occurrence_id": "43346c40-d29d-5cf8-9803-79f38b4c14ce",
+          "relative_path": "data/System.json",
+          "locator": {
+            "pointer": "/terms/save"
+          },
+          "expected_value_hash": "250717a1ada55d57020bd278785d09f9f399c9329c4caf6b82f69ea07fec64e8",
+          "adapter_id": "rpgmaker-native",
+          "role": "system.term",
+          "ordinal": 0
+        }
+      ],
+      "token_policy_id": "rpgmaker-v1",
+      "source_hash": "250717a1ada55d57020bd278785d09f9f399c9329c4caf6b82f69ea07fec64e8"
+    }
+  ],
+  "issues": [
+    {
+      "code": "pending_profile_rule",
+      "severity": "warning",
+      "message": "pending json rule pending is a candidate only",
+      "unit_id": "",
+      "path": "data/RandomTalk.json",
+      "details": {
+        "rule_id": "pending",
+        "file": "data/RandomTalk.json",
+        "selector": "/*/voiceId"
+      }
+    },
+    {
+      "code": "unsupported_command_candidate",
+      "severity": "warning",
+      "message": "script: 1 occurrence(s)",
+      "unit_id": "",
+      "path": "",
+      "details": {
+        "command": "script",
+        "count": 1
+      }
+    }
+  ],
+  "files": [
+    {
+      "relative_path": "data/Items.json",
+      "sha256": "a45f7cf2c259172ba145819bb376891927f358d74e1b97d98d131a9df10b75e5",
+      "size": 111,
+      "encoding": "utf-8"
+    },
+    {
+      "relative_path": "data/Map001.json",
+      "sha256": "4eeb36a5ac801b8c7b4283602d3e099e72ff92931eaf7f3375c07a66b4c7ce67",
+      "size": 682,
+      "encoding": "utf-8"
+    },
+    {
+      "relative_path": "data/RandomTalk.json",
+      "sha256": "4c1d9c9d7a484509cdac91367ea25b7a7909d1c20340fd8970e36979eb703dd8",
+      "size": 65,
+      "encoding": "utf-8"
+    },
+    {
+      "relative_path": "data/System.json",
+      "sha256": "fbb18267b9d3fb95b5bfff86a675d5116ddd3ccf7f98afbbf56dd569cca914f2",
+      "size": 155,
+      "encoding": "utf-8"
+    }
+  ],
+  "stats": {
+    "data_json_count": 4,
+    "map_count": 1,
+    "code_counts": {
+      "101": 1,
+      "401": 2,
+      "102": 1,
+      "402": 2,
+      "404": 1,
+      "355": 1,
+      "0": 1
+    },
+    "unsupported_commands": {
+      "script": 1
+    },
+    "unit_count": 12,
+    "profile_excluded_count": 0,
+    "profile_exclusions": []
+  }
+}

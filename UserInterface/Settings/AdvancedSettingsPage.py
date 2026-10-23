@@ -1,4 +1,11 @@
-from PyQt5.QtWidgets import QFrame, QSizePolicy, QStackedWidget, QVBoxLayout
+from PyQt5.QtWidgets import (
+    QFrame,
+    QScrollArea,
+    QSizePolicy,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 from qfluentwidgets import SegmentedWidget
 
 from ModuleFolders.Base.Base import Base
@@ -15,9 +22,21 @@ class AdvancedSettingsPage(QFrame, ConfigMixin, Base):
         super().__init__(window)
         self.setObjectName(text.replace(" ", "-"))
 
-        self.container = QVBoxLayout(self)
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        self.content_scroll = QScrollArea(self)
+        self.content_scroll.setObjectName('advanced-settings-content-scroll')
+        self.content_scroll.setWidgetResizable(True)
+        self.content_scroll.setFrameShape(QFrame.NoFrame)
+        self.content_widget = QWidget()
+        self.content_widget.setObjectName('advanced-settings-content')
+        self.container = QVBoxLayout(self.content_widget)
         self.container.setSpacing(0)
         self.container.setContentsMargins(24, 10, 24, 24)
+        self.content_scroll.setWidget(self.content_widget)
+        root_layout.addWidget(self.content_scroll)
 
         self.tab_bar = SegmentedWidget(self)
         self.tab_bar.setFixedHeight(38)

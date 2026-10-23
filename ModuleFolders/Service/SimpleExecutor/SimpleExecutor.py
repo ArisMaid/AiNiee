@@ -20,8 +20,9 @@ from ModuleFolders.Service.Cache.CacheItem import TranslationStatus
 # 简易请求器
 class SimpleExecutor(ConfigMixin, LogMixin, Base):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, cache_manager=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.cache_manager=cache_manager
 
         # 订阅接口测试开始事件
         self.subscribe(Base.EVENT.API_TEST_START, self.api_test_start)
@@ -326,14 +327,30 @@ class SimpleExecutor(ConfigMixin, LogMixin, Base):
             "total_count": len(untranslated_items)
         })
 
+    def _is_game_table(self):
+        from ModuleFolders.Service.GameProject.GameCacheIdentity import is_game_projection
+        return bool(self.cache_manager and is_game_projection(self.cache_manager.project))
+
+    def _process_game_table(self,data,mode,config=None,requester=None,*,task_scope=None):
+        from ModuleFolders.Service.GameProject.GameTableExecution import run_table_group
+        return run_table_group(self,data,mode,config=config,requester=requester,
+            task_scope=task_scope,config_factory=TaskConfig)
+
+    def _handle_game_table_start(self,data,mode):
+        from functools import partial
+        from ModuleFolders.Service.GameProject.GameTableExecution import handle_table_start
+        return handle_table_start(self,data,mode,partial(self._process_game_table,mode=mode))
+
     # 响应表格翻译开始事件，并启动新线程
     def handle_table_translation_start(self, event, data: dict):
+        if self._handle_game_table_start(data,'translate'):return
         thread = threading.Thread(target=self.process_table_translation, args=(data,), daemon=True)
         thread.start()
 
     # 表格文本的分批翻译
     def process_table_translation(self, data: dict):
         """处理表格文件的批量翻译任务"""
+        if self._is_game_table():return self._process_game_table(data,'translate')
         # 解包从UI传来的数据
         file_path = data.get("file_path")
         items_to_translate = data.get("items_to_translate")
@@ -470,12 +487,14 @@ class SimpleExecutor(ConfigMixin, LogMixin, Base):
 
     # 响应表格润色事件
     def handle_table_polish_start(self, event, data: dict):
+        if self._handle_game_table_start(data,'polish'):return
         thread = threading.Thread(target=self.process_table_polish, args=(data,), daemon=True)
         thread.start()
 
     # 表格文本的分批润色
     def process_table_polish(self, data: dict):
         """处理表格文件的批量润色任务"""
+        if self._is_game_table():return self._process_game_table(data,'polish')
         # 解包数据
         file_path = data.get("file_path")
         items_to_polish = data.get("items_to_polish")

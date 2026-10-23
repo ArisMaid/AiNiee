@@ -39,7 +39,21 @@ class PolisherTask(LogMixin, Base):
     def set_previous_items(self, previous_items: list[CacheItem]) -> None:
         self.previous_items = previous_items
 
-    def prepare(self) -> None:
+    def bind_game_execution(self,scope,on_job,on_job_done):
+        self._game_execution_scope=scope
+        self._game_on_job=on_job
+        self._game_on_job_done=on_job_done
+
+    def prepare(self, *, game_preparation=None) -> None:
+        from ModuleFolders.Service.GameProject.GameBatchRunner import is_game_batch, GameBatchRunner
+        self._game_batch = None
+        if is_game_batch(self.items):
+            self._game_batch = GameBatchRunner(self.items, self.config, self.request_limiter, mode='polish',
+                preparation=game_preparation, previous_items=getattr(self,'previous_items',[]),
+                execution_scope=getattr(self,'_game_execution_scope',None))
+            self.request_tokens_consume = self._game_batch.request_tokens_consume
+            self.row_count = len(self.items)
+            return
         self.previous_text_list = [item.source_text for item in self.previous_items]
         self.source_text_dict = {str(i): item.source_text for i, item in enumerate(self.items)}
         self.translation_text_dict = {str(i): item.translated_text for i, item in enumerate(self.items)}
@@ -61,6 +75,10 @@ class PolisherTask(LogMixin, Base):
         return self.unit_polish_task()
 
     def unit_polish_task(self) -> dict:
+        if getattr(self, '_game_batch', None) is not None:
+            if self._game_batch.execution_scope is not None:
+                return self._game_batch.run(on_job=self._game_on_job,on_job_done=self._game_on_job_done)
+            return self._game_batch.run()
         task_start_time = time.time()
 
         while True:

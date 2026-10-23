@@ -1,4 +1,5 @@
 import threading
+import os
 
 import requests
 from PyQt5.QtCore import QThread, QTimer, QUrl, pyqtSignal
@@ -10,7 +11,6 @@ from qfluentwidgets import (
     MessageBox,
     NavigationAvatarWidget,
     NavigationItemPosition,
-    SystemThemeListener,
     Theme,
     setTheme,
     setThemeColor,
@@ -44,6 +44,7 @@ from UserInterface.PromptSettings.TranslationSettings.WorldBuildingPromptPage im
 from UserInterface.PromptSettings.TranslationSettings.WritingStylePromptPage import WritingStylePromptPage
 from UserInterface.VersionManager.VersionManager import VersionManager
 from UserInterface.Widget.Toast import ToastMixin
+from UserInterface.StoppableThemeListener import StoppableThemeListener
 
 
 # 自动检查更新线程
@@ -70,6 +71,10 @@ class AppFluentWindow(FluentWindow, ConfigMixin, LogMixin, ToastMixin, Base):
 
     def __init__(self, version: str, cache_manager, file_reader) -> None:
         super().__init__()
+        self.cache_manager = cache_manager
+        self._game_translation_loader = None
+        self._game_translation_edit_enabled = True
+        self._game_translation_cancel_pending = False
 
         # 启动后台线程发送日活统计，不阻塞 UI
         def report_activity():
@@ -80,7 +85,8 @@ class AppFluentWindow(FluentWindow, ConfigMixin, LogMixin, ToastMixin, Base):
                 self.debug(f"Activity report failed: {error}")
 
         # 设置 daemon=True，确保主程序退出时线程也会自动关闭
-        threading.Thread(target=report_activity, daemon=True).start()
+        if os.environ.get('AINIEE_OFFLINE') != '1':
+            threading.Thread(target=report_activity, daemon=True).start()
 
         # 默认配置
         self.default = {
@@ -101,9 +107,10 @@ class AppFluentWindow(FluentWindow, ConfigMixin, LogMixin, ToastMixin, Base):
         setThemeColor(config.get("accent_color", self.THEME_COLOR))
         setTheme(self._theme_for_mode(self._theme_mode))
 
-        self.systemThemeListener = SystemThemeListener(self)
+        self.systemThemeListener = StoppableThemeListener(self)
         self.systemThemeListener.systemThemeChanged.connect(self._on_system_theme_changed)
-        self.systemThemeListener.start()
+        if QApplication.platformName() not in {'offscreen','minimal'}:
+            self.systemThemeListener.start()
 
         # 设置窗口属性
         desktop = QApplication.desktop().availableGeometry()
@@ -116,7 +123,8 @@ class AppFluentWindow(FluentWindow, ConfigMixin, LogMixin, ToastMixin, Base):
 
         # 初始化版本管理器，并在应用加载完成后异步检查更新
         self.version_manager = VersionManager(self, version)
-        QTimer.singleShot(3000, self.check_for_updates)
+        if os.environ.get('AINIEE_OFFLINE') != '1':
+            QTimer.singleShot(3000, self.check_for_updates)
 
         # 设置启动位置
         desktop = QApplication.desktop().availableGeometry()
@@ -124,27 +132,51 @@ class AppFluentWindow(FluentWindow, ConfigMixin, LogMixin, ToastMixin, Base):
 
         # 设置侧边栏属性
         self.navigationInterface.setExpandWidth(226)
-        self.navigationInterface.expand(useAni=False)
+        if initial_width>=1008:
+            self.navigationInterface.expand(useAni=False)
+        else:
+            self.navigationInterface.panel.collapse()
         self.navigationInterface.setUpdateIndicatorPosOnCollapseFinished(True)
         self.navigationInterface.panel.setReturnButtonVisible(False)
 
         # 添加页面
         self.add_pages(cache_manager, file_reader)
+        self._configure_navigation_compact_threshold()
         self.install_macos_menu()
+
+    def _configure_navigation_compact_threshold(self) -> None:
+        """Collapse before the expanded page layout blocks a compact resize."""
+        navigation = self.navigationInterface
+        expanded_width = int(navigation.panel.expandWidth)
+        current_width = int(navigation.width())
+        expanded_extra = max(0, expanded_width - current_width)
+        expanded_minimum = int(self.minimumSizeHint().width()) + expanded_extra
+        threshold = max(1008, expanded_minimum + 1)
+        navigation.setMinimumExpandWidth(threshold)
+        if self.width() < threshold and not navigation.panel.isCollapsed():
+            navigation.panel.collapse()
 
     # 窗口关闭函数
     def closeEvent(self, event) -> None:
+        if hasattr(self,'game_project_page') and self.game_project_page.is_busy():
+            self.game_project_page._report_error('游戏工程操作正在进行，请等待完成后退出。')
+            event.ignore()
+            return
         info_cont = self.tra("确定是否退出程序") + " ... ？"
         message_box = MessageBox("Warning", info_cont, self)
         message_box.yesButton.setText(self.tra("确认"))
         message_box.cancelButton.setText(self.tra("取消"))
 
         if message_box.exec():
+            if hasattr(self, "systemThemeListener"):
+                self.systemThemeListener.requestInterruption()
+                self.systemThemeListener.quit()
+                if not self.systemThemeListener.wait(1200):
+                    self.game_project_page._report_error('主题监听正在退出，请稍后再关闭窗口。')
+                    event.ignore()
+                    return
             self.emit(Base.EVENT.APP_SHUT_DOWN, {})
             self.info(self.tra("主窗口已关闭，稍后应用将自动退出") + " ... ")
-            if hasattr(self, "systemThemeListener"):
-                self.systemThemeListener.terminate()
-                self.systemThemeListener.deleteLater()
             event.accept()
         else:
             event.ignore()
@@ -172,6 +204,84 @@ class AppFluentWindow(FluentWindow, ConfigMixin, LogMixin, ToastMixin, Base):
             "dark": self.tra("已切换至深色主题"),
             "auto": self.tra("已切换至跟随系统"),
         }.get(mode, "")
+
+    def open_game_translation(self, path):
+        if Base.work_status != Base.STATUS.IDLE:
+            self.game_project_page._report_error('请先停止当前翻译任务，再切换游戏工程。')
+            return
+        if self._game_translation_loader is not None or self.game_project_page.is_busy():
+            self.game_project_page._report_error('已有游戏工程操作正在进行，请等待完成。')
+            return
+        from UserInterface.GameProject.GameTranslationLoader import GameTranslationLoadJob
+        worker = GameTranslationLoadJob(path, self)
+        self._game_translation_loader = worker
+        self._game_translation_cancel_pending = False
+        self._game_translation_edit_enabled = self.edit_view_page.isEnabled()
+        self.edit_view_page.setEnabled(False)
+        self.game_project_page.error_label.clear()
+        self.game_project_page.error_label.hide()
+        self.game_project_page.set_translation_loading(True)
+        worker.succeeded.connect(lambda project: self._game_translation_ready(worker, path, project))
+        worker.failed.connect(lambda error: self._game_translation_error(worker, error))
+        worker.cancelled.connect(lambda: self._game_translation_cancelled(worker))
+        worker.finished.connect(lambda: self._finish_game_translation(worker))
+        worker.start()
+
+    def _game_translation_ready(self, worker, path, project):
+        if worker is not self._game_translation_loader:
+            return
+        if self._game_translation_cancel_pending or worker.isInterruptionRequested():
+            self._game_translation_cancelled(worker)
+            return
+        if Base.work_status != Base.STATUS.IDLE:
+            self.game_project_page._report_error('翻译任务状态已变化，未切换工程；请停止任务后重试。')
+            return
+        previous = self.cache_manager.project
+        try:
+            # SQLite preparation ran once on the worker. Only this GUI slot
+            # adopts the detached cache and updates widgets.
+            self.cache_manager._adopt_prepared_game_projection(project)
+            self.edit_view_page.on_folder_selected(project.project_name, 'new')
+            config = self.save_config({'translation_project':'RpgGame','label_input_path':path,
+                                      'source_language':'japanese','target_language':'chinese_simplified'})
+            self.edit_view_page.translation_page.language_settings_card.apply_config(config)
+            self.switchTo(self.edit_view_page)
+            self.game_project_page._set_status('已载入 AiNiee 翻译视图；可配置并启动翻译。')
+        except Exception as error:
+            with self.cache_manager.file_lock:
+                self.cache_manager.project = previous
+            try:
+                if previous:
+                    self.edit_view_page.on_folder_selected(previous.project_name, 'continue')
+                else:
+                    self.edit_view_page.on_back_button_clicked()
+            except Exception as restore_error:
+                self.game_project_page._report_error(f'{error}；视图恢复失败：{restore_error}')
+                return
+            self.game_project_page._report_error(str(error))
+
+    def _game_translation_error(self, worker, error):
+        if worker is self._game_translation_loader:
+            self.game_project_page._report_error(error)
+
+    def _game_translation_cancelled(self, worker):
+        if worker is self._game_translation_loader:
+            self.game_project_page._set_status('已取消载入翻译视图；当前翻译工程保持。')
+
+    def _cancel_game_translation(self):
+        if self._game_translation_loader is not None:
+            # QThread clears its interruption flag after run() returns. Keep
+            # the user's request until queued GUI results have been handled.
+            self._game_translation_cancel_pending = True
+            self._game_translation_loader.requestInterruption()
+            self.game_project_page._set_status('已请求取消载入翻译视图…')
+
+    def _finish_game_translation(self, worker):
+        if worker is self._game_translation_loader:
+            self._game_translation_loader = None
+            self.edit_view_page.setEnabled(self._game_translation_edit_enabled)
+            self.game_project_page.set_translation_loading(False)
+        worker.deleteLater()
 
     # 打开项目主页
     def open_project_page(self) -> None:
@@ -295,6 +405,11 @@ class AppFluentWindow(FluentWindow, ConfigMixin, LogMixin, ToastMixin, Base):
 
         self.edit_view_page = EditViewPage("edit_view_page", self, cache_manager, file_reader)
         self.addSubInterface(self.edit_view_page, FluentIcon.PLAY, self.tra("开始翻译"), NavigationItemPosition.SCROLL)
+        from UserInterface.GameProject.GameProjectPage import GameProjectPage
+        self.game_project_page = GameProjectPage(self, on_translate=self.open_game_translation)
+        self.game_project_page.translationCancelRequested.connect(self._cancel_game_translation)
+        self.game_project_page.setObjectName('game-project')
+        self.addSubInterface(self.game_project_page, FluentIcon.GAME, '游戏汉化', NavigationItemPosition.SCROLL)
 
     # 添加任务设置
     def add_task_setting_pages(self) -> None:

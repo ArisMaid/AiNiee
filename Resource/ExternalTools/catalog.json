@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "tools": {
+    "translatorpp": {
+      "label": "Translator++",
+      "version": "8.8.9",
+      "kind": "7z",
+      "url": "https://github.com/dreamsavior/TranslatorPlusPlus/releases/download/8.8.9/Translator%2B%2B_8.8.9_x64_.51895b12.7z",
+      "sha256": "2389b58a1315870ca4bf3ee7b2eff06d65b2b635a5c56a9b3b0a59b1c1d9131c",
+      "bytes": 221133957,
+      "folder": "Translator++",
+      "description": "译文交换与人工编辑；使用时自动启动本地 API，不需要 Translator++ 会员或 API Key。",
+      "homepage": "https://dreamsavior.net/translator-8-8-9-is-going-public/"
+    },
+    "ocr": {
+      "label": "Tesseract OCR",
+      "version": "5.4.0.20240606",
+      "kind": "nsis",
+      "url": "https://github.com/UB-Mannheim/tesseract/releases/download/v5.4.0.20240606/tesseract-ocr-w64-setup-5.4.0.20240606.exe",
+      "sha256": "c885fff6998e0608ba4bb8ab51436e1c6775c2bafc2559a19b423e18678b60c9",
+      "bytes": 50175248,
+      "folder": "OCR工具",
+      "description": "图片日文识别；自动配置 tesseract 和日英识别数据。",
+      "homepage": "https://github.com/UB-Mannheim/tesseract",
+      "language": {
+        "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/jpn.traineddata",
+        "sha256": "1f5de9236d2e85f5fdf4b3c500f2d4926f8d9449f28f5394472d9e8d83b91b4d"
+      }
+    },
+    "rpgmtl": {
+      "label": "RPGMTL",
+      "version": "0fa346b020e439fd392027f735107a283c9836d9",
+      "kind": "zip",
+      "folder": "RPGMTL",
+      "description": "指定 JSON、CommonEvents 与 JS 候选回写；选择文件路由后调用。",
+      "homepage": "https://github.com/MizaGBF/RPGMTL",
+      "required": [
+        "plugins/json.py",
+        "plugins/javascript.py",
+        "rpgmtl.py"
+      ],
+      "url": "https://codeload.github.com/MizaGBF/RPGMTL/zip/0fa346b020e439fd392027f735107a283c9836d9",
+      "sha256": "0c8d3df642f3ed3e98ffd7a9bf3358afae59cdf9e0fd3c0f7a201f51150ef275",
+      "bytes": 1273620,
+      "archive_prefix": "RPGMTL-0fa346b020e439fd392027f735107a283c9836d9/",
+      "entry_sha256": {
+        "plugins/json.py": "39caede5ffb2ae3d92028220fbeabb0cc85645b55ad435847f4631aa57a913ad",
+        "plugins/javascript.py": "900b38749e63c2a3ed6e1c74248c4625e7c6973bb9d0f1e46a8da583f2d1a209",
+        "rpgmtl.py": "2ff409f4b929d6b3d1903bd7e45605ec59095d2e1033658f25a8b4e2c05ee6b4"
+      }
+    },
+    "sextractor": {
+      "label": "SExtractor",
+      "version": "8d8d976fd04ae54e7c677705af937273d04a376a",
+      "kind": "zip",
+      "folder": "SExtractor",
+      "description": "RPGMV/MZ JSON 指定入口；选择文件路由后调用。",
+      "homepage": "https://github.com/satan53x/SExtractor",
+      "required": [
+        "src/extract_RPGMV.py",
+        "src/main_extract.py",
+        "src/main_extract_json.py",
+        "src/engine.ini"
+      ],
+      "url": "https://codeload.github.com/satan53x/SExtractor/zip/8d8d976fd04ae54e7c677705af937273d04a376a",
+      "sha256": "a34a4852785080d90bd9468ab7336314ed33e3bd90c2e558f3592cb19088e9c3",
+      "bytes": 64898506,
+      "archive_prefix": "SExtractor-8d8d976fd04ae54e7c677705af937273d04a376a/",
+      "entry_sha256": {
+        "src/extract_RPGMV.py": "1c1feda48eacdde0eeb011baacb1b3084fc00556e0ebcc553ef30e762f8bed59",
+        "src/main_extract.py": "ee03f75977d58edbd887467a1f3860a6d6de5eec39f38b8d6aaebc2b33efb8a1",
+        "src/main_extract_json.py": "3082118957c652045bb5e9791cf147e0a251e4ee23692874c7914b0fbad14ba6",
+        "src/engine.ini": "bd483ba967d46cc0faef0847da2a93d0eaf70862318e5d1f191f2af3e3ff7f7c"
+      }
+    },
+    "stev": {
+      "label": "StevExtraction",
+      "version": "7bbb06be33f5968f0723a5200a150d895d4fa5fb",
+      "kind": "zip",
+      "folder": "StevExtraction",
+      "description": "目录级 JSON 桥接；保持原生批准位置和候选校验。",
+      "homepage": "https://github.com/NEKOparapa/AiNiee",
+      "subdir": "StevExtraction",
+      "required": [
+        "jtpp.py",
+        "config.yaml"
+      ],
+      "url": "https://codeload.github.com/NEKOparapa/AiNiee/zip/7bbb06be33f5968f0723a5200a150d895d4fa5fb",
+      "sha256": "8fb82e0faf50a9f6c94f536630af2ac4d88cdb014baa51145c15f6cbc69a577f",
+      "bytes": 51436729,
+      "archive_prefix": "AiNiee-7bbb06be33f5968f0723a5200a150d895d4fa5fb/StevExtraction/",
+      "entry_sha256": {
+        "jtpp.py": "664c367b1aed966786ec2bbd5ff2f7e293237551ae45c85917c897b4c86fd404",
+        "config.yaml": "e2feb6ade8d9448dd398d9fb32d93fb647724fbc9c4aeba42befda6135cbf563"
+      }
+    }
+  },
+  "archiver": {
+    "version": "26.05",
+    "url": "https://github.com/ip7z/7zip/releases/download/26.05/7z2605-x64.msi",
+    "sha256": "3fe4ab99fa15629c652944309a2b2bc6e41fc933fc6b63f5df1ebcf3aea68263",
+    "bytes": 2008576
+  }
+}
